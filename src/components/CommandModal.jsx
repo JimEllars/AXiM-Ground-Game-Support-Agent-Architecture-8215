@@ -4,18 +4,29 @@ import SafeIcon from '../common/SafeIcon';
 export default function CommandModal({ isOpen, onClose, onSendCommand }) {
   const [targetId, setTargetId] = useState('');
   const [command, setCommand] = useState('flush_buffer');
+  const [toast, setToast] = useState(null);
   
   if (!isOpen) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSendCommand({ targetDeviceId: targetId, command });
+    setToast(`Command '${command}' successfully dispatched to ${targetId}`);
     setTargetId('');
+    setTimeout(() => {
+      setToast(null);
+      onClose();
+    }, 2000);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl overflow-hidden">
+        {toast && (
+          <div className="bg-green-500/20 border-b border-green-500/50 text-green-400 px-5 py-3 text-sm font-medium flex items-center justify-center">
+            {toast}
+          </div>
+        )}
         <div className="flex justify-between items-center p-5 border-b border-gray-800">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
             <SafeIcon name="Cpu" className="text-indigo-400" />
