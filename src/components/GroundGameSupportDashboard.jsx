@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import DashboardHeader from './DashboardHeader';
 import IncidentList from './IncidentList';
 import CommandModal from './CommandModal';
+import { supabase } from '../lib/supabase';
 
 const MOCK_INCIDENTS = [
   {
@@ -32,7 +33,7 @@ const MOCK_INCIDENTS = [
 
 export default function GroundGameSupportDashboard() {
   const [isCommandModalOpen, setCommandModalOpen] = useState(false);
-  const [incidents, setIncidents] = useState(MOCK_INCIDENTS);
+  const [incidents, setIncidents] = useState([]);
   const [isLive, setIsLive] = useState(true);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -42,15 +43,73 @@ export default function GroundGameSupportDashboard() {
 
   const fetchIncidents = useCallback(async () => {
     if (!isLive) return;
-    // Real implementation would poll an API here
-    // For now, we mock some live polling activity by updating timestamps or adding fake ones
-    // console.log("Polling updates...");
+    try {
+      const { data, error } = await supabase
+        .from('groundgame_support_incidents')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching incidents:', error);
+        return;
+      }
+
+      if (data) {
+        const mappedIncidents = data.map(inc => ({
+          id: inc.id,
+          deviceId: inc.agent_device_id,
+          operatorAddress: inc.field_operator_address,
+          category: inc.category,
+          status: inc.remediation_status,
+          createdAt: inc.created_at
+        }));
+        setIncidents(mappedIncidents);
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+    }
   }, [isLive]);
 
   useEffect(() => {
-    const interval = setInterval(fetchIncidents, 10000);
-    return () => clearInterval(interval);
-  }, [fetchIncidents]);
+    fetchIncidents();
+
+    let subscription = null;
+
+    if (isLive) {
+      subscription = supabase
+        .channel('schema-db-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'groundgame_support_incidents',
+          },
+          (payload) => {
+            const newIncident = payload.new;
+            setIncidents(prev => {
+              const mapped = {
+                id: newIncident.id,
+                deviceId: newIncident.agent_device_id,
+                operatorAddress: newIncident.field_operator_address,
+                category: newIncident.category,
+                status: newIncident.remediation_status,
+                createdAt: newIncident.created_at
+              };
+              return [mapped, ...prev].slice(0, 50);
+            });
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
+    };
+  }, [fetchIncidents, isLive]);
 
   const handleSendCommand = (cmdData) => {
     console.log("Command Dispatched to KV:", cmdData);
