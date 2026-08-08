@@ -1,0 +1,16 @@
+{
+  "name": "groundgame-support-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-03-04",
+  "kv_namespaces": [
+    {
+      "binding": "SUPPORT_STATE",
+      "id": "local_dev_mock_id"
+    }
+  ],
+  "vars": {
+    "AXIM_INTERNAL_KEY": "dev_key_override",
+    "SUPABASE_URL": "https://mock.supabase.co",
+    "CENTRAL_SUPPORT_WEBHOOK_URL": "http://localhost:3000/webhook"
+  }
+}
