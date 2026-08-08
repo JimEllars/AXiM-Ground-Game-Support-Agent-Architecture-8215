@@ -13,7 +13,6 @@ const CORS_HEADERS = {
   "Cache-Control": "no-store, private"
 };
 
-
 async function logAudit(env: Env, eventType: string, actor: string, targetDeviceId: string, details: any) {
   try {
     await fetch(`${env.SUPABASE_URL}/rest/v1/hitl_audit_logs`, {
@@ -29,7 +28,6 @@ async function logAudit(env: Env, eventType: string, actor: string, targetDevice
         actor: actor,
         target_device_id: targetDeviceId,
         details: details,
-        // created_at will be handled by default in DB or we can send it
       })
     });
   } catch (err) {
@@ -45,7 +43,6 @@ export default {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    // 1. Inbound Incident Reporting from Ground Game App
     if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/report") {
       try {
         const payload = await request.json() as any;
@@ -69,7 +66,6 @@ export default {
         let remediationStatus = "detected";
         let actionsApplied: string[] = [];
 
-        // Self-Healing Evaluation Rules
         if (category === "offline_buffer_stagnation") {
           actionsApplied.push("EXECUTED: flush_field_offline_buffer");
           remediationStatus = "self_healed";
@@ -88,7 +84,6 @@ export default {
           actionsApplied.push("EXECUTED: reset_edge_rate_limit");
           remediationStatus = "self_healed";
         } else {
-          // Escalate unhandled errors to Central Support System
           remediationStatus = "escalated_to_central_support";
         }
 
@@ -96,7 +91,6 @@ export default {
            ctx.waitUntil(logAudit(env, "automated_self_healing", "system", deviceId, { category, actions_applied: actionsApplied }));
         }
 
-        // Persist to Supabase Core
         const dbRes = await fetch(`${env.SUPABASE_URL}/rest/v1/groundgame_support_incidents`, {
           method: "POST",
           headers: {
@@ -116,27 +110,42 @@ export default {
         });
 
         const incidentData = await dbRes.json() as any;
+        const incidentId = incidentData[0]?.id;
 
-        // If Escalated, notify Central Support System
         if (remediationStatus === "escalated_to_central_support" && env.CENTRAL_SUPPORT_WEBHOOK_URL) {
-          ctx.waitUntil(
-            fetch(env.CENTRAL_SUPPORT_WEBHOOK_URL, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "X-Axim-Signature": env.AXIM_INTERNAL_KEY },
-              body: JSON.stringify({
-                appSource: "AXiM Ground Game",
-                incidentId: incidentData[0]?.id,
-                payload
-              })
-            }).catch(err => console.error("Central Support Webhook Error:", err))
-          );
+          ctx.waitUntil((async () => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const webhookPayload = {
+              appSource: "AXiM Ground Game",
+              incidentId: incidentId,
+              payload
+            };
+            try {
+              const res = await fetch(env.CENTRAL_SUPPORT_WEBHOOK_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Axim-Signature": env.AXIM_INTERNAL_KEY },
+                body: JSON.stringify(webhookPayload),
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              if (!res.ok) {
+                throw new Error(`Webhook failed with status ${res.status}`);
+              }
+            } catch (err) {
+              clearTimeout(timeoutId);
+              console.error("Central Support Webhook Error:", err);
+              await env.SUPPORT_STATE.put(`webhook_failed:${incidentId}`, JSON.stringify(webhookPayload), { expirationTtl: 86400 });
+              await logAudit(env, "webhook_delivery_failed", "system", deviceId, { category, error: String(err) });
+            }
+          })());
         }
 
         return new Response(JSON.stringify({
           success: true,
           remediationStatus,
           actionsApplied,
-          incidentId: incidentData[0]?.id
+          incidentId
         }), { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 
       } catch (err: any) {
@@ -144,7 +153,54 @@ export default {
       }
     }
 
-    // 2. Inbound Command from Central Support System to Ground Game App
+    // New Webhook Retry Endpoint
+    if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/retry-webhooks") {
+      const signature = request.headers.get("X-Axim-Signature");
+      if (!signature || signature !== env.AXIM_INTERNAL_KEY) {
+        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+      }
+
+      try {
+        const listRes = await env.SUPPORT_STATE.list({ prefix: "webhook_failed:" });
+        const retried = [];
+        const failed = [];
+
+        for (const key of listRes.keys) {
+          const val = await env.SUPPORT_STATE.get(key.name);
+          if (val) {
+            const parsed = JSON.parse(val);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            try {
+              const res = await fetch(env.CENTRAL_SUPPORT_WEBHOOK_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Axim-Signature": env.AXIM_INTERNAL_KEY },
+                body: JSON.stringify(parsed),
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              if (res.ok) {
+                await env.SUPPORT_STATE.delete(key.name);
+                retried.push(key.name);
+              } else {
+                failed.push(key.name);
+              }
+            } catch (err) {
+              clearTimeout(timeoutId);
+              failed.push(key.name);
+            }
+          }
+        }
+
+        return new Response(JSON.stringify({ success: true, retried, failed }), {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/command") {
       const signature = request.headers.get("X-Axim-Signature");
       if (!signature || signature !== env.AXIM_INTERNAL_KEY) {
@@ -154,12 +210,9 @@ export default {
       const body = await request.json() as any;
       const { targetDeviceId, command, parameters } = body;
 
-
-      // Queue command in KV for Ground Game App to pick up on next poll
       await env.SUPPORT_STATE.put(`cmd:${targetDeviceId}:${Date.now()}`, JSON.stringify({ command, parameters }), { expirationTtl: 3600 });
 
       ctx.waitUntil(logAudit(env, "operator_command", "operator", targetDeviceId, { category: "manual_command", actions_applied: [command] }));
-
 
       return new Response(JSON.stringify({ success: true, status: "command_queued", targetDeviceId }), {
         status: 200,
@@ -167,8 +220,6 @@ export default {
       });
     }
 
-
-    // 3. Field Device Command Polling Endpoint
     if (request.method === "GET" && url.pathname === "/api/v1/support/groundgame/poll") {
       const deviceId = url.searchParams.get("deviceId");
       if (!deviceId) {
@@ -190,7 +241,6 @@ export default {
             parameters: parsed.parameters || {},
             timestamp: timestamp
           });
-          // Delete or mark to prevent duplicate
           ctx.waitUntil(env.SUPPORT_STATE.delete(key.name));
         }
       }
@@ -205,7 +255,6 @@ export default {
       });
     }
 
-    // 4. Health Check Endpoint
     if (request.method === "GET" && url.pathname === "/health") {
       return new Response(JSON.stringify({ status: "live", timestamp: Date.now(), runtime: "edge" }), {
         status: 200,
