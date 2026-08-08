@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import SafeIcon from '../common/SafeIcon';
 
 const getStatusBadge = (status) => {
@@ -17,6 +17,16 @@ const getCategoryLabel = (cat) => {
 };
 
 export default function IncidentList({ incidents }) {
+  const [expandedId, setExpandedId] = useState(null);
+
+  const toggleExpand = (id) => {
+    setExpandedId(expandedId === id ? null : id);
+  };
+
+  const handleCopy = (data) => {
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+  };
+
   return (
     <div className="p-6">
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-sm">
@@ -29,35 +39,64 @@ export default function IncidentList({ incidents }) {
                 <th className="p-4 font-semibold">Issue Category</th>
                 <th className="p-4 font-semibold">Status</th>
                 <th className="p-4 font-semibold">Timestamp</th>
+                <th className="p-4 font-semibold">Telemetry</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
               {incidents.map((incident) => (
-                <tr key={incident.id} className="hover:bg-gray-800/30 transition-colors">
-                  <td className="p-4 text-sm font-mono text-gray-300">
-                    {incident.id.substring(0, 8)}...
-                  </td>
-                  <td className="p-4">
-                    <div className="text-sm font-medium text-white">{incident.deviceId}</div>
-                    <div className="text-xs text-gray-500 font-mono mt-0.5">{incident.operatorAddress}</div>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <SafeIcon name="Shield" className="text-gray-500" />
-                      <span className="text-sm text-gray-300">{getCategoryLabel(incident.category)}</span>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    {getStatusBadge(incident.status)}
-                  </td>
-                  <td className="p-4 text-sm text-gray-500">
-                    {new Date(incident.createdAt).toLocaleTimeString()}
-                  </td>
-                </tr>
+                <React.Fragment key={incident.id}>
+                  <tr className="hover:bg-gray-800/30 transition-colors">
+                    <td className="p-4 text-sm font-mono text-gray-300">
+                      {incident.id.substring(0, 8)}...
+                    </td>
+                    <td className="p-4">
+                      <div className="text-sm font-medium text-white">{incident.deviceId}</div>
+                      <div className="text-xs text-gray-500 font-mono mt-0.5">{incident.operatorAddress}</div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <SafeIcon name="Shield" className="text-gray-500" />
+                        <span className="text-sm text-gray-300">{getCategoryLabel(incident.category)}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      {getStatusBadge(incident.status)}
+                    </td>
+                    <td className="p-4 text-sm text-gray-500">
+                      {new Date(incident.createdAt).toLocaleTimeString()}
+                    </td>
+                    <td className="p-4">
+                      <button
+                        onClick={() => toggleExpand(incident.id)}
+                        className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        {expandedId === incident.id ? 'Hide' : 'Inspect Diagnostic Telemetry'}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedId === incident.id && (
+                    <tr className="bg-gray-800/20">
+                      <td colSpan="6" className="p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Diagnostic Snapshot</span>
+                          <button
+                            onClick={() => handleCopy(incident.diagnosticSnapshot)}
+                            className="text-xs flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded transition-colors"
+                          >
+                            <SafeIcon name="Copy" className="text-[10px]" /> Copy JSON
+                          </button>
+                        </div>
+                        <pre className="bg-gray-900 border border-gray-800 p-3 rounded-lg text-xs text-green-400 font-mono overflow-x-auto whitespace-pre-wrap">
+                          {incident.diagnosticSnapshot ? JSON.stringify(incident.diagnosticSnapshot, null, 2) : 'No diagnostic data available.'}
+                        </pre>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
               {incidents.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="p-8 text-center text-gray-500 text-sm">
+                  <td colSpan="6" className="p-8 text-center text-gray-500 text-sm">
                     No active incidents. The field is clear.
                   </td>
                 </tr>

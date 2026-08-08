@@ -11,6 +11,7 @@ const MOCK_INCIDENTS = [
     operatorAddress: '0x71C...392A',
     category: 'offline_buffer_stagnation',
     status: 'self_healed',
+    diagnosticSnapshot: { battery: 45, memory: "120MB" },
     createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString()
   },
   {
@@ -19,6 +20,7 @@ const MOCK_INCIDENTS = [
     operatorAddress: '0x88D...112B',
     category: 'jwt_clock_skew',
     status: 'self_healed',
+    diagnosticSnapshot: { battery: 45, memory: "120MB" },
     createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString()
   },
   {
@@ -62,6 +64,7 @@ export default function GroundGameSupportDashboard() {
           operatorAddress: inc.field_operator_address,
           category: inc.category,
           status: inc.remediation_status,
+          diagnosticSnapshot: inc.diagnostic_snapshot,
           createdAt: inc.created_at
         }));
         setIncidents(mappedIncidents);
@@ -95,6 +98,7 @@ export default function GroundGameSupportDashboard() {
                 operatorAddress: newIncident.field_operator_address,
                 category: newIncident.category,
                 status: newIncident.remediation_status,
+                diagnosticSnapshot: newIncident.diagnostic_snapshot,
                 createdAt: newIncident.created_at
               };
               return [mapped, ...prev].slice(0, 50);
@@ -111,13 +115,34 @@ export default function GroundGameSupportDashboard() {
     };
   }, [fetchIncidents, isLive]);
 
-  const handleSendCommand = (cmdData) => {
-    console.log("Command Dispatched to KV:", cmdData);
-    setToastMessage(`Command '${cmdData.command}' successfully dispatched to ${cmdData.targetDeviceId}`);
-    setToastMessage(`Command '${cmdData.command}' successfully dispatched to ${cmdData.targetDeviceId}`);
-    setCommandModalOpen(false);
-  };
+  const handleSendCommand = async (cmdData) => {
+    try {
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+      const response = await fetch(`${edgeUrl}/api/v1/support/groundgame/command`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+        },
+        body: JSON.stringify({
+          targetDeviceId: cmdData.targetDeviceId,
+          command: cmdData.command,
+          parameters: {}
+        })
+      });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      setToastMessage(`Command '${cmdData.command}' successfully dispatched to ${cmdData.targetDeviceId}`);
+    } catch (error) {
+      console.error("Failed to dispatch command:", error);
+      setToastMessage(`Failed to dispatch command '${cmdData.command}' to ${cmdData.targetDeviceId}`);
+    }
+    setCommandModalOpen(false);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
   const filteredIncidents = incidents.filter(i => {
     if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
     if (statusFilter !== 'all' && i.status !== statusFilter) return false;
