@@ -48,8 +48,8 @@ export default function CommandModal({ isOpen, onClose, onSendCommand }) {
             >
               <option value="flush_buffer">Flush Offline Buffer</option>
               <option value="reissue_token">Reissue Ephemeral Token</option>
-              <option value="force_resync">Force Map Resync</option>
-              <option value="release_lock">Release Row Lock</option>
+              <option value="clear_address_lock">Clear Address Lock</option>
+              <option value="reset_rate_limit">Reset Rate Limit</option>
             </select>
           </div>
 
