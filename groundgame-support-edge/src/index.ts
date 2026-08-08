@@ -84,7 +84,7 @@ export default {
           actionsApplied.push("EXECUTED: release_canvass_row_lock");
           remediationStatus = "self_healed";
         } else if (category === "api_rate_limit_lock") {
-          await env.SUPPORT_STATE.put(`cooldown:${deviceId}`, "reset", { expirationTtl: 60 });
+          await env.SUPPORT_STATE.delete(rateLimitKey);
           actionsApplied.push("EXECUTED: reset_edge_rate_limit");
           remediationStatus = "self_healed";
         } else {
@@ -177,18 +177,37 @@ export default {
 
       const prefix = `cmd:${deviceId}:`;
       const listRes = await env.SUPPORT_STATE.list({ prefix });
-      const commands = [];
+      const pendingCommands = [];
 
       for (const key of listRes.keys) {
         const val = await env.SUPPORT_STATE.get(key.name);
         if (val) {
-          commands.push({ id: key.name, ...JSON.parse(val) });
+          const parsed = JSON.parse(val);
+          const parts = key.name.split(':');
+          const timestamp = parts.length === 3 ? parseInt(parts[2], 10) : Date.now();
+          pendingCommands.push({
+            command: parsed.command,
+            parameters: parsed.parameters || {},
+            timestamp: timestamp
+          });
           // Delete or mark to prevent duplicate
           ctx.waitUntil(env.SUPPORT_STATE.delete(key.name));
         }
       }
 
-      return new Response(JSON.stringify({ commands }), {
+      return new Response(JSON.stringify({
+        success: true,
+        deviceId: deviceId,
+        pendingCommands
+      }), {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
+
+    // 4. Health Check Endpoint
+    if (request.method === "GET" && url.pathname === "/health") {
+      return new Response(JSON.stringify({ status: "live", timestamp: Date.now(), runtime: "edge" }), {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
       });
