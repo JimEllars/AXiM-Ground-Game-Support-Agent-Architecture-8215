@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import DashboardHeader from './DashboardHeader';
 import IncidentList from './IncidentList';
 import CommandModal from './CommandModal';
@@ -24,7 +24,7 @@ const MOCK_INCIDENTS = [
     id: 'b12cc10b-58cc-4372-a567-0e02b2c3d999',
     deviceId: 'DEV-11234-CX',
     operatorAddress: '0x11A...992C',
-    category: 'unknown_field_fault',
+    category: 'api_rate_limit_lock',
     status: 'escalated_to_central_support',
     createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString()
   }
@@ -33,24 +33,116 @@ const MOCK_INCIDENTS = [
 export default function GroundGameSupportDashboard() {
   const [isCommandModalOpen, setCommandModalOpen] = useState(false);
   const [incidents, setIncidents] = useState(MOCK_INCIDENTS);
+  const [isLive, setIsLive] = useState(true);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  // Filters
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const fetchIncidents = useCallback(async () => {
+    if (!isLive) return;
+    // Real implementation would poll an API here
+    // For now, we mock some live polling activity by updating timestamps or adding fake ones
+    // console.log("Polling updates...");
+  }, [isLive]);
+
+  useEffect(() => {
+    const interval = setInterval(fetchIncidents, 10000);
+    return () => clearInterval(interval);
+  }, [fetchIncidents]);
 
   const handleSendCommand = (cmdData) => {
     console.log("Command Dispatched to KV:", cmdData);
-    alert(`Command '${cmdData.command}' queued for ${cmdData.targetDeviceId}`);
+    setToastMessage(`Command '${cmdData.command}' successfully dispatched to ${cmdData.targetDeviceId}`);
+    setToastMessage(`Command '${cmdData.command}' successfully dispatched to ${cmdData.targetDeviceId}`);
     setCommandModalOpen(false);
   };
 
+  const filteredIncidents = incidents.filter(i => {
+    if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
+    if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+    return true;
+  });
+
+  // KPI Metrics Calculation
+  const totalIncidents = incidents.length;
+  const selfHealedCount = incidents.filter(i => i.status === 'self_healed').length;
+  const selfHealedRate = totalIncidents > 0 ? ((selfHealedCount / totalIncidents) * 100).toFixed(1) : 0;
+  const escalatedCount = incidents.filter(i => i.status === 'escalated_to_central_support').length;
+  const activeDevicesCount = new Set(incidents.map(i => i.deviceId)).size;
+
+  const metrics = { selfHealedRate, escalatedCount };
+
   return (
-    <div className="min-h-screen bg-black text-gray-100 font-sans selection:bg-indigo-500/30">
-      <DashboardHeader onOpenCommand={() => setCommandModalOpen(true)} />
+    <div className="min-h-screen bg-black text-gray-100 font-sans selection:bg-indigo-500/30 relative">
+      <DashboardHeader
+        onOpenCommand={() => setCommandModalOpen(true)}
+        isLive={isLive}
+        onToggleLive={() => setIsLive(!isLive)}
+        metrics={metrics}
+      />
       
-      <main className="max-w-7xl mx-auto">
-        <div className="px-6 pt-6">
-          <h2 className="text-lg font-medium text-white mb-2">Live Incident Stream</h2>
-          <p className="text-sm text-gray-400 mb-4">Real-time autonomic telemetry from AXiM field edge agents.</p>
+      {toastMessage && (
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 bg-green-500 text-white px-4 py-2 rounded shadow-lg transition-opacity">
+          {toastMessage}
+        </div>
+      )}
+
+      <main className="max-w-7xl mx-auto px-6 pt-6">
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl">
+            <div className="text-sm text-gray-400 mb-1">Total Incidents (24h)</div>
+            <div className="text-2xl font-bold text-white">{totalIncidents}</div>
+          </div>
+          <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl">
+            <div className="text-sm text-gray-400 mb-1">Self-Healing Success</div>
+            <div className="text-2xl font-bold text-green-400">{selfHealedRate}%</div>
+          </div>
+          <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl">
+            <div className="text-sm text-gray-400 mb-1">Escalated Tickets</div>
+            <div className="text-2xl font-bold text-amber-400">{escalatedCount}</div>
+          </div>
+          <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl">
+            <div className="text-sm text-gray-400 mb-1">Active Field Devices</div>
+            <div className="text-2xl font-bold text-blue-400">{activeDevicesCount}</div>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-end mb-4">
+          <div>
+            <h2 className="text-lg font-medium text-white mb-1">Live Incident Stream</h2>
+            <p className="text-sm text-gray-400">Real-time autonomic telemetry from AXiM field edge agents.</p>
+          </div>
+          <div className="flex gap-4">
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="all">All Categories</option>
+              <option value="gps_telemetry_drift">GPS Telemetry Drift</option>
+              <option value="offline_buffer_stagnation">Offline Buffer Stagnation</option>
+              <option value="jwt_clock_skew">JWT Clock Skew</option>
+              <option value="data_sync_conflict">Data Sync Conflict</option>
+              <option value="api_rate_limit_lock">API Rate Limit Lock</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="all">All Statuses</option>
+              <option value="self_healed">Self-Healed</option>
+              <option value="escalated_to_central_support">Escalated</option>
+              <option value="detected">Detected</option>
+            </select>
+          </div>
         </div>
         
-        <IncidentList incidents={incidents} />
+        <IncidentList incidents={filteredIncidents} />
       </main>
 
       <CommandModal 

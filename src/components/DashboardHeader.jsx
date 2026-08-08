@@ -1,7 +1,7 @@
 import React from 'react';
 import SafeIcon from '../common/SafeIcon';
 
-export default function DashboardHeader({ onOpenCommand }) {
+export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, metrics }) {
   return (
     <header className="bg-gray-900 border-b border-gray-800 p-6 flex justify-between items-center">
       <div className="flex items-center gap-4">
@@ -15,14 +15,22 @@ export default function DashboardHeader({ onOpenCommand }) {
       </div>
       
       <div className="flex items-center gap-4">
+        <button
+          onClick={onToggleLive}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md transition-colors text-xs font-medium mr-4 border border-gray-700"
+        >
+          <SafeIcon name={isLive ? "Pause" : "Play"} className="text-sm" />
+          <span>{isLive ? "Pause Live Feed" : "Resume Live Feed"}</span>
+        </button>
+
         <div className="flex gap-6 mr-6">
           <div className="flex flex-col">
             <span className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Self-Healed</span>
-            <span className="text-lg font-mono text-green-400">94.2%</span>
+            <span className="text-lg font-mono text-green-400">{metrics.selfHealedRate}%</span>
           </div>
           <div className="flex flex-col">
             <span className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Active Escalations</span>
-            <span className="text-lg font-mono text-amber-400">12</span>
+            <span className="text-lg font-mono text-amber-400">{metrics.escalatedCount}</span>
           </div>
         </div>
         <button 
