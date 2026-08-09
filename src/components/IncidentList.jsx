@@ -26,7 +26,7 @@ const getCategoryLabel = (cat) => {
   return cat.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 };
 
-export default function IncidentList({ incidents, onAcknowledge }) {
+export default function IncidentList({ incidents, onAcknowledge, selectedIncidents = [], setSelectedIncidents }) {
   const [expandedId, setExpandedId] = useState(null);
 
   const toggleExpand = (id) => {
@@ -44,6 +44,28 @@ export default function IncidentList({ incidents, onAcknowledge }) {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-800/50 border-b border-gray-800 text-xs uppercase tracking-wider text-gray-400">
+                <th className="p-4 w-12 text-center">
+                  {incidents.some(i => i.status === 'escalated_to_central_support') && (
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-600 bg-gray-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-gray-900"
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const escalatedIds = incidents
+                            .filter(i => i.status === 'escalated_to_central_support')
+                            .map(i => i.id);
+                          setSelectedIncidents(escalatedIds);
+                        } else {
+                          setSelectedIncidents([]);
+                        }
+                      }}
+                      checked={
+                        incidents.filter(i => i.status === 'escalated_to_central_support').length > 0 &&
+                        incidents.filter(i => i.status === 'escalated_to_central_support').every(i => selectedIncidents.includes(i.id))
+                      }
+                    />
+                  )}
+                </th>
                 <th className="p-4 font-semibold">Incident ID</th>
                 <th className="p-4 font-semibold">Device / Operator</th>
                 <th className="p-4 font-semibold">Issue Category</th>
@@ -55,7 +77,23 @@ export default function IncidentList({ incidents, onAcknowledge }) {
             <tbody className="divide-y divide-gray-800">
               {incidents.map((incident) => (
                 <React.Fragment key={incident.id}>
-                  <tr className="hover:bg-gray-800/30 transition-colors">
+                  <tr className={`hover:bg-gray-800/30 transition-colors ${selectedIncidents.includes(incident.id) ? 'bg-indigo-900/20' : ''}`}>
+                    <td className="p-4 text-center">
+                      {incident.status === 'escalated_to_central_support' && setSelectedIncidents && (
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-600 bg-gray-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-gray-900"
+                          checked={selectedIncidents.includes(incident.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedIncidents(prev => [...prev, incident.id]);
+                            } else {
+                              setSelectedIncidents(prev => prev.filter(id => id !== incident.id));
+                            }
+                          }}
+                        />
+                      )}
+                    </td>
                     <td className="p-4 text-sm font-mono text-gray-300">
                       {incident.id.substring(0, 8)}...
                     </td>
@@ -97,7 +135,7 @@ export default function IncidentList({ incidents, onAcknowledge }) {
                   </tr>
                   {expandedId === incident.id && (
                     <tr className="bg-gray-800/20">
-                      <td colSpan="6" className="p-4">
+                      <td colSpan="7" className="p-4">
 
                         <div className="flex flex-col mb-2">
                           <div className="flex justify-between items-start mb-2">
@@ -140,7 +178,7 @@ export default function IncidentList({ incidents, onAcknowledge }) {
               ))}
               {incidents.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-gray-500 text-sm">
+                  <td colSpan="7" className="p-8 text-center text-gray-500 text-sm">
                     No active incidents. The field is clear.
                   </td>
                 </tr>

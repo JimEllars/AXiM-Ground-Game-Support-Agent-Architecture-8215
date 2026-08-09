@@ -45,6 +45,7 @@ export default function GroundGameSupportDashboard() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIncidents, setSelectedIncidents] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -90,24 +91,32 @@ export default function GroundGameSupportDashboard() {
         .on(
           'postgres_changes',
           {
-            event: 'INSERT',
+            event: '*',
             schema: 'public',
             table: 'groundgame_support_incidents',
           },
           (payload) => {
-            const newIncident = payload.new;
-            setIncidents(prev => {
-              const mapped = {
-                id: newIncident.id,
-                deviceId: newIncident.agent_device_id,
-                operatorAddress: newIncident.field_operator_address,
-                category: newIncident.category,
-                status: newIncident.remediation_status,
-                diagnosticSnapshot: newIncident.diagnostic_snapshot,
-                createdAt: newIncident.created_at
-              };
-              return [mapped, ...prev].slice(0, 50);
-            });
+            if (payload.eventType === 'INSERT') {
+              const newIncident = payload.new;
+              setIncidents(prev => {
+                const mapped = {
+                  id: newIncident.id,
+                  deviceId: newIncident.agent_device_id,
+                  operatorAddress: newIncident.field_operator_address,
+                  category: newIncident.category,
+                  status: newIncident.remediation_status,
+                  diagnosticSnapshot: newIncident.diagnostic_snapshot,
+                  createdAt: newIncident.created_at
+                };
+                return [mapped, ...prev].slice(0, 50);
+              });
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedIncident = payload.new;
+              setIncidents(prev => prev.map(inc =>
+                inc.id === updatedIncident.id ?
+                { ...inc, status: updatedIncident.remediation_status, resolvedAt: updatedIncident.resolved_at } : inc
+              ));
+            }
           }
         )
         .subscribe();
@@ -144,6 +153,37 @@ export default function GroundGameSupportDashboard() {
     } catch (error) {
       console.error("Failed to dispatch command:", error);
       // setToastMessage(`Failed to dispatch command '${cmdData.command}' to ${cmdData.targetDeviceId}`);
+    }
+  };
+
+  const handleBulkAcknowledge = async () => {
+    if (selectedIncidents.length === 0) return;
+
+    try {
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+      const requests = selectedIncidents.map(incidentId => {
+        const incident = incidents.find(i => i.id === incidentId);
+        return fetch(`${edgeUrl}/api/v1/support/groundgame/acknowledge`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+          },
+          body: JSON.stringify({
+            incidentId,
+            operatorAddress: incident ? incident.operatorAddress : 'system'
+          })
+        });
+      });
+
+      await Promise.all(requests);
+      setToastMessage(`Successfully resolved ${selectedIncidents.length} incidents.`);
+      setSelectedIncidents([]);
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (error) {
+      console.error("Failed to bulk acknowledge incidents:", error);
+      setToastMessage(`Failed to resolve selected incidents.`);
+      setTimeout(() => setToastMessage(null), 3000);
     }
   };
 
@@ -357,7 +397,23 @@ export default function GroundGameSupportDashboard() {
           </div>
         </div>
         
-        <IncidentList incidents={filteredIncidents} onAcknowledge={handleAcknowledgeIncident} />
+        {selectedIncidents.length > 0 && (
+          <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50">
+            <button
+              onClick={handleBulkAcknowledge}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-full px-6 py-3 shadow-lg shadow-indigo-900/50 transition-all flex items-center gap-2"
+            >
+              <SafeIcon name="Check" className="text-sm" />
+              Bulk Acknowledge Selected ({selectedIncidents.length})
+            </button>
+          </div>
+        )}
+        <IncidentList
+          incidents={filteredIncidents}
+          onAcknowledge={handleAcknowledgeIncident}
+          selectedIncidents={selectedIncidents}
+          setSelectedIncidents={setSelectedIncidents}
+        />
       </main>
 
       <CommandModal 
