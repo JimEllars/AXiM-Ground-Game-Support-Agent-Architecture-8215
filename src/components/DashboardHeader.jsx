@@ -2,10 +2,15 @@ import React, { useState, useEffect } from 'react';
 import SafeIcon from '../common/SafeIcon';
 
 export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit, onOpenRateLimit }) {
+
   const [healthStatus, setHealthStatus] = useState(null);
   const [latency, setLatency] = useState(null);
   const [pendingFailedWebhooks, setPendingFailedWebhooks] = useState(0);
+  const [activeCommandQueues, setActiveCommandQueues] = useState(0);
+  const [activeAddressLocks, setActiveAddressLocks] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [showQueuePopover, setShowQueuePopover] = useState(false);
+
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -22,6 +27,12 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
           if (data.pendingFailedWebhooks !== undefined) {
              setPendingFailedWebhooks(data.pendingFailedWebhooks);
           }
+          if (data.activeCommandQueues !== undefined) {
+             setActiveCommandQueues(data.activeCommandQueues);
+          }
+          if (data.activeAddressLocks !== undefined) {
+             setActiveAddressLocks(data.activeAddressLocks);
+          }
         } else {
           setHealthStatus('offline');
         }
@@ -34,6 +45,26 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
   }, []);
+
+
+  const handleRefreshKV = async () => {
+      const start = Date.now();
+      try {
+        const res = await fetch('/health');
+        if (res.ok) {
+          const data = await res.json();
+          setLatency(Date.now() - start);
+          setHealthStatus('online');
+          if (data.pendingFailedWebhooks !== undefined) setPendingFailedWebhooks(data.pendingFailedWebhooks);
+          if (data.activeCommandQueues !== undefined) setActiveCommandQueues(data.activeCommandQueues);
+          if (data.activeAddressLocks !== undefined) setActiveAddressLocks(data.activeAddressLocks);
+        } else {
+          setHealthStatus('offline');
+        }
+      } catch (err) {
+        setHealthStatus('offline');
+      }
+  };
 
   const handleManualRetry = async () => {
     setIsRetrying(true);
@@ -50,6 +81,12 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
         fetch('/health').then(res => res.ok && res.json()).then(data => {
           if (data && data.pendingFailedWebhooks !== undefined) {
             setPendingFailedWebhooks(data.pendingFailedWebhooks);
+          }
+          if (data && data.activeCommandQueues !== undefined) {
+             setActiveCommandQueues(data.activeCommandQueues);
+          }
+          if (data && data.activeAddressLocks !== undefined) {
+             setActiveAddressLocks(data.activeAddressLocks);
           }
         }).catch(() => {});
       }, 1000);
@@ -74,11 +111,45 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
       
       <div className="flex items-center gap-4">
         {healthStatus && (
-          <div className="flex items-center gap-2 mr-4 px-3 py-1.5 rounded-full bg-gray-800 border border-gray-700 text-xs font-medium">
-            <span className={`w-2 h-2 rounded-full ${healthStatus === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-            <span className="text-gray-300">
-              {healthStatus === 'online' ? `Edge Online • ${latency}ms` : 'Edge Offline'}
-            </span>
+          <div className="relative">
+            <div
+              className="flex items-center gap-2 mr-4 px-3 py-1.5 rounded-full bg-gray-800 border border-gray-700 text-xs font-medium cursor-pointer hover:bg-gray-700 transition-colors"
+              onClick={() => setShowQueuePopover(!showQueuePopover)}
+            >
+              <span className={`w-2 h-2 rounded-full ${healthStatus === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+              <span className="text-gray-300">
+                {healthStatus === 'online' ? `Edge Online • ${latency}ms` : 'Edge Offline'}
+              </span>
+            </div>
+
+            {showQueuePopover && (
+              <div className="absolute top-full left-0 mt-2 w-56 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">KV Queue State</h4>
+                  <button
+                    onClick={handleRefreshKV}
+                    className="text-gray-400 hover:text-white transition-colors"
+                    title="Refresh KV Telemetry"
+                  >
+                    <SafeIcon name="RefreshCw" className="text-[12px]" />
+                  </button>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Pending Commands:</span>
+                    <span className="font-mono text-white">{activeCommandQueues}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Address Locks:</span>
+                    <span className="font-mono text-white">{activeAddressLocks}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Retry Webhooks:</span>
+                    <span className="font-mono text-amber-400">{pendingFailedWebhooks}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {pendingFailedWebhooks > 0 && (

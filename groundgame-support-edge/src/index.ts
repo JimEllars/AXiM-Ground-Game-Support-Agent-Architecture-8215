@@ -218,6 +218,55 @@ export default {
       }
     }
 
+
+    if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/acknowledge") {
+      const signature = request.headers.get("X-Axim-Signature");
+      if (!signature || signature !== env.AXIM_INTERNAL_KEY) {
+        logRequest(url, request.method, null, 401);
+        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+      }
+
+      try {
+        const body = await request.json() as any;
+        const { incidentId, operatorAddress } = body;
+
+        if (!incidentId || !operatorAddress) {
+           return new Response("Missing required fields", { status: 400, headers: CORS_HEADERS });
+        }
+
+        // Update groundgame_support_incidents in Supabase
+        const dbRes = await fetch(`${env.SUPABASE_URL}/rest/v1/groundgame_support_incidents?id=eq.${incidentId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+            "apikey": env.SUPABASE_SERVICE_KEY,
+            "Prefer": "return=representation"
+          },
+          body: JSON.stringify({
+            remediation_status: "operator_takeover",
+            resolved_at: new Date().toISOString()
+          })
+        });
+
+        if (!dbRes.ok) {
+           throw new Error("Failed to update incident in Supabase");
+        }
+
+        ctx.waitUntil(logAudit(env, "operator_takeover", "operator", "system", { incidentId, operatorAddress }));
+
+        logRequest(url, request.method, "system", 200);
+        return new Response(JSON.stringify({ success: true, status: "operator_takeover", incidentId }), {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+
+      } catch (err: any) {
+        logRequest(url, request.method, null, 500);
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     if (request.method === "GET" && url.pathname === "/api/v1/support/groundgame/rate-limits") {
       const signature = request.headers.get("X-Axim-Signature");
       if (!signature || signature !== env.AXIM_INTERNAL_KEY) {

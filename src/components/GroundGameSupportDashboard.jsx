@@ -146,6 +146,35 @@ export default function GroundGameSupportDashboard() {
       // setToastMessage(`Failed to dispatch command '${cmdData.command}' to ${cmdData.targetDeviceId}`);
     }
   };
+
+  const handleAcknowledgeIncident = async (incidentId, operatorAddress) => {
+    try {
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+      const response = await fetch(`${edgeUrl}/api/v1/support/groundgame/acknowledge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+        },
+        body: JSON.stringify({
+          incidentId,
+          operatorAddress
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      setToastMessage(`Incident ${incidentId.substring(0,8)} resolved by ${operatorAddress}`);
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (error) {
+      console.error("Failed to acknowledge incident:", error);
+      setToastMessage(`Failed to acknowledge incident ${incidentId.substring(0,8)}`);
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
   const filteredIncidents = incidents.filter(i => {
     if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
     if (statusFilter !== 'all' && i.status !== statusFilter) return false;
@@ -328,7 +357,7 @@ export default function GroundGameSupportDashboard() {
           </div>
         </div>
         
-        <IncidentList incidents={filteredIncidents} />
+        <IncidentList incidents={filteredIncidents} onAcknowledge={handleAcknowledgeIncident} />
       </main>
 
       <CommandModal 
