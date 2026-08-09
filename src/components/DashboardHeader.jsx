@@ -4,15 +4,24 @@ import SafeIcon from '../common/SafeIcon';
 export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit }) {
   const [healthStatus, setHealthStatus] = useState(null);
   const [latency, setLatency] = useState(null);
+  const [pendingFailedWebhooks, setPendingFailedWebhooks] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   useEffect(() => {
     const checkHealth = async () => {
       const start = Date.now();
       try {
-        const res = await fetch('/health'); // Relative path, assuming proxy or same origin for edge worker in production
+        const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+        // Need to make sure we fetch from the edge. The original code just used `/health`, which means it might be proxied. Let's stick with what they had but parsing JSON.
+        // Wait, their manual command uses `${edgeUrl}/api/v1/support/groundgame/command` so maybe we should use edgeUrl for health too if available, but the original code did fetch('/health'). We'll keep fetch('/health') for compatibility or maybe use edgeUrl. I will use fetch('/health') as it was but parse json.
+        const res = await fetch('/health');
         if (res.ok) {
+          const data = await res.json();
           setLatency(Date.now() - start);
           setHealthStatus('online');
+          if (data.pendingFailedWebhooks !== undefined) {
+             setPendingFailedWebhooks(data.pendingFailedWebhooks);
+          }
         } else {
           setHealthStatus('offline');
         }
@@ -25,6 +34,32 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleManualRetry = async () => {
+    setIsRetrying(true);
+    try {
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+      await fetch(`${edgeUrl}/api/v1/support/groundgame/retry-webhooks`, {
+        method: 'POST',
+        headers: {
+          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+        }
+      });
+      // Re-check health after a short delay
+      setTimeout(() => {
+        fetch('/health').then(res => res.ok && res.json()).then(data => {
+          if (data && data.pendingFailedWebhooks !== undefined) {
+            setPendingFailedWebhooks(data.pendingFailedWebhooks);
+          }
+        }).catch(() => {});
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to retry webhooks:', err);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   return (
     <header className="bg-gray-900 border-b border-gray-800 p-6 flex justify-between items-center">
       <div className="flex items-center gap-4">
@@ -45,6 +80,17 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
               {healthStatus === 'online' ? `Edge Online • ${latency}ms` : 'Edge Offline'}
             </span>
           </div>
+        )}
+        {pendingFailedWebhooks > 0 && (
+          <button
+            onClick={handleManualRetry}
+            disabled={isRetrying}
+            className="flex items-center gap-2 mr-4 px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-400 text-xs font-medium hover:bg-amber-500/30 transition-colors"
+          >
+            <SafeIcon name="AlertTriangle" className="text-[10px]" />
+            <span>Retry Queue: {pendingFailedWebhooks}</span>
+            {isRetrying && <SafeIcon name="RefreshCw" className="text-[10px] animate-spin ml-1" />}
+          </button>
         )}
         <button
           onClick={onToggleLive}
