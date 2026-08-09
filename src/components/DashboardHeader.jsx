@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SafeIcon from '../common/SafeIcon';
 
-export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit }) {
+export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit, onOpenRateLimit }) {
   const [healthStatus, setHealthStatus] = useState(null);
   const [latency, setLatency] = useState(null);
   const [pendingFailedWebhooks, setPendingFailedWebhooks] = useState(0);
@@ -116,6 +116,14 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
         >
           <SafeIcon name="Shield" />
           <span>Audit Trail</span>
+        </button>
+
+        <button
+          onClick={onOpenRateLimit}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-orange-400 px-4 py-2 rounded-md transition-colors font-medium text-sm mr-2"
+        >
+          <SafeIcon name="Flame" />
+          <span>Rate Limits</span>
         </button>
         <button 
           onClick={onOpenCommand}
