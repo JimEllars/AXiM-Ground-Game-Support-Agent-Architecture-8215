@@ -218,6 +218,47 @@ export default {
       }
     }
 
+    if (request.method === "GET" && url.pathname === "/api/v1/support/groundgame/rate-limits") {
+      const signature = request.headers.get("X-Axim-Signature");
+      if (!signature || signature !== env.AXIM_INTERNAL_KEY) {
+        logRequest(url, request.method, null, 401);
+        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+      }
+
+      const prefix = "ratelimit:";
+      const listRes = await env.SUPPORT_STATE.list({ prefix });
+      const throttledDevices = [];
+
+      for (const key of listRes.keys) {
+        const val = await env.SUPPORT_STATE.get(key.name);
+        if (val) {
+          const count = parseInt(val, 10);
+          const parts = key.name.split(':');
+          if (parts.length >= 3) {
+             const deviceId = parts[1];
+             const minuteKey = parseInt(parts[2], 10);
+             // expiration is minuteKey + 1 min
+             const expiresAtMs = (minuteKey + 1) * 60000;
+             const expiresInSeconds = Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000));
+             throttledDevices.push({
+               deviceId,
+               requestCount: count,
+               expiresInSeconds
+             });
+          }
+        }
+      }
+
+      logRequest(url, request.method, "system", 200);
+      return new Response(JSON.stringify({
+        success: true,
+        throttledDevices
+      }), {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
+
     // New Webhook Retry Endpoint
     if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/retry-webhooks") {
       const signature = request.headers.get("X-Axim-Signature");
