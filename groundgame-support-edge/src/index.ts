@@ -74,9 +74,27 @@ async function logAudit(env: Env, eventType: string, actor: string, targetDevice
   }
 }
 
+
+function logRequest(url: URL, method: string, deviceId: string | null, status: number) {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    endpoint: url.pathname,
+    method: method,
+    deviceId: deviceId || "system",
+    status: status
+  }));
+}
+
 export default {
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      endpoint: "scheduled",
+      method: "CRON",
+      deviceId: "system",
+      status: 200
+    }));
     ctx.waitUntil(retryFailedWebhooks(env));
   },
 
@@ -84,6 +102,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
+      logRequest(url, request.method, null, 204);
       return new Response(null, { headers: CORS_HEADERS });
     }
 
@@ -100,8 +119,8 @@ export default {
         if (currentCount) count = parseInt(currentCount, 10);
 
         if (count >= 30) {
+          logRequest(url, request.method, deviceId, 429);
           return new Response("Too Many Requests", {
-            status: 429,
             headers: { ...CORS_HEADERS, "X-RateLimit-Limit": "30", "X-RateLimit-Reset": String((minuteKey + 1) * 60000) }
           });
         }
@@ -185,6 +204,7 @@ export default {
           })());
         }
 
+        logRequest(url, request.method, deviceId, 200);
         return new Response(JSON.stringify({
           success: true,
           remediationStatus,
@@ -193,6 +213,7 @@ export default {
         }), { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 
       } catch (err: any) {
+        logRequest(url, request.method, null, 500);
         return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS_HEADERS });
       }
     }
@@ -201,15 +222,17 @@ export default {
     if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/retry-webhooks") {
       const signature = request.headers.get("X-Axim-Signature");
       if (!signature || signature !== env.AXIM_INTERNAL_KEY) {
+        logRequest(url, request.method, null, 401);
         return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
       }
 
       const result = await retryFailedWebhooks(env);
       if (result.error) {
+        logRequest(url, request.method, null, 500);
         return new Response(JSON.stringify({ error: result.error }), { status: 500, headers: CORS_HEADERS });
       }
+      logRequest(url, request.method, null, 200);
       return new Response(JSON.stringify(result), {
-        status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
       });
     }
@@ -217,6 +240,7 @@ export default {
     if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/command") {
       const signature = request.headers.get("X-Axim-Signature");
       if (!signature || signature !== env.AXIM_INTERNAL_KEY) {
+        logRequest(url, request.method, null, 401);
         return new Response("Unauthorized Edge Ingress", { status: 401, headers: CORS_HEADERS });
       }
 
@@ -227,6 +251,7 @@ export default {
 
       ctx.waitUntil(logAudit(env, "operator_command", "operator", targetDeviceId, { category: "manual_command", actions_applied: [command] }));
 
+      logRequest(url, request.method, targetDeviceId, 200);
       return new Response(JSON.stringify({ success: true, status: "command_queued", targetDeviceId }), {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
@@ -236,6 +261,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/v1/support/groundgame/poll") {
       const deviceId = url.searchParams.get("deviceId");
       if (!deviceId) {
+        logRequest(url, request.method, null, 400);
         return new Response("Missing deviceId", { status: 400, headers: CORS_HEADERS });
       }
 
@@ -258,6 +284,7 @@ export default {
         }
       }
 
+      logRequest(url, request.method, deviceId, 200);
       return new Response(JSON.stringify({
         success: true,
         deviceId: deviceId,
@@ -269,12 +296,16 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
-      return new Response(JSON.stringify({ status: "live", timestamp: Date.now(), runtime: "edge" }), {
+      const listRes = await env.SUPPORT_STATE.list({ prefix: "webhook_failed:" });
+      const pendingFailedWebhooks = listRes.keys.length;
+      logRequest(url, request.method, null, 200);
+      return new Response(JSON.stringify({ status: "live", timestamp: Date.now(), runtime: "edge", pendingFailedWebhooks }), {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
       });
     }
 
+    logRequest(url, request.method, null, 404);
     return new Response("Not Found", { status: 404 });
   }
 };

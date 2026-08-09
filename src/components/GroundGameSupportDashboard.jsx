@@ -42,6 +42,7 @@ export default function GroundGameSupportDashboard() {
   const [toastMessage, setToastMessage] = useState(null);
 
   // Filters
+  const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -146,6 +147,12 @@ export default function GroundGameSupportDashboard() {
   const filteredIncidents = incidents.filter(i => {
     if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
     if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!i.deviceId.toLowerCase().includes(q) && !i.operatorAddress.toLowerCase().includes(q)) {
+        return false;
+      }
+    }
     return true;
   });
 
@@ -202,6 +209,13 @@ export default function GroundGameSupportDashboard() {
             <p className="text-sm text-gray-400">Real-time autonomic telemetry from AXiM field edge agents.</p>
           </div>
           <div className="flex gap-4">
+            <input
+              type="text"
+              placeholder="Search Device or Operator..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-sm text-white rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500 w-64"
+            />
             <select
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}

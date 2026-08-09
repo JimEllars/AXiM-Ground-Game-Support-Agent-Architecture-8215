@@ -9,6 +9,21 @@ export default function HITLAuditModal({ isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       fetchLogs();
+
+      const subscription = supabase
+        .channel('public:hitl_audit_logs')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'hitl_audit_logs' },
+          (payload) => {
+            setLogs((currentLogs) => [payload.new, ...currentLogs].slice(0, 25));
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(subscription);
+      };
     }
   }, [isOpen]);
 
