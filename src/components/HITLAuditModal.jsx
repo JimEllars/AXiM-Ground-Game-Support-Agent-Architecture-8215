@@ -59,6 +59,23 @@ export default function HITLAuditModal({ isOpen, onClose }) {
             Audit Activity Log
           </h2>
           <div className="flex gap-4">
+            <button
+              onClick={() => {
+                const jsonString = JSON.stringify(logs, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'axim_audit_logs_export.json');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+              className="text-sm font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors border border-gray-700 mr-2"
+            >
+              Export JSON
+            </button>
             <button onClick={fetchLogs} className="text-gray-400 hover:text-white transition-colors" title="Refresh">
                <SafeIcon name="RefreshCw" className="text-lg" />
             </button>

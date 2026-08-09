@@ -209,6 +209,39 @@ export default function GroundGameSupportDashboard() {
             <p className="text-sm text-gray-400">Real-time autonomic telemetry from AXiM field edge agents.</p>
           </div>
           <div className="flex gap-4">
+            <button
+              onClick={() => {
+                const headers = ['Incident ID', 'Device ID', 'Operator Address', 'Category', 'Status', 'Diagnostic Snapshot', 'Created At'];
+                const csvRows = [headers.join(',')];
+
+                filteredIncidents.forEach(inc => {
+                  const values = [
+                    inc.id,
+                    inc.deviceId,
+                    inc.operatorAddress,
+                    inc.category,
+                    inc.status,
+                    inc.diagnosticSnapshot ? JSON.stringify(inc.diagnosticSnapshot).replace(/"/g, '""') : '',
+                    inc.createdAt
+                  ];
+                  csvRows.push(values.map(v => `"${v}"`).join(','));
+                });
+
+                const csvString = csvRows.join('\n');
+                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'axim_incidents_export.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg px-4 py-1.5 transition-colors shadow-sm"
+            >
+              Export CSV
+            </button>
             <input
               type="text"
               placeholder="Search Device or Operator..."
