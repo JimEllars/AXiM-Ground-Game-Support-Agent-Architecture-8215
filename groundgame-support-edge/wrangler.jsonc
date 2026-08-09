@@ -12,5 +12,8 @@
     "AXIM_INTERNAL_KEY": "dev_key_override",
     "SUPABASE_URL": "https://mock.supabase.co",
     "CENTRAL_SUPPORT_WEBHOOK_URL": "http://localhost:3000/webhook"
+  },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
   }
 }

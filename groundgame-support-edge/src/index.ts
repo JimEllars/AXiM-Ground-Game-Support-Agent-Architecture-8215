@@ -13,6 +13,45 @@ const CORS_HEADERS = {
   "Cache-Control": "no-store, private"
 };
 
+
+async function retryFailedWebhooks(env: Env) {
+  try {
+    const listRes = await env.SUPPORT_STATE.list({ prefix: "webhook_failed:" });
+    const retried = [];
+    const failed = [];
+
+    for (const key of listRes.keys) {
+      const val = await env.SUPPORT_STATE.get(key.name);
+      if (val) {
+        const parsed = JSON.parse(val);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        try {
+          const res = await fetch(env.CENTRAL_SUPPORT_WEBHOOK_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Axim-Signature": env.AXIM_INTERNAL_KEY },
+            body: JSON.stringify(parsed),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            await env.SUPPORT_STATE.delete(key.name);
+            retried.push(key.name);
+          } else {
+            failed.push(key.name);
+          }
+        } catch (err) {
+          clearTimeout(timeoutId);
+          failed.push(key.name);
+        }
+      }
+    }
+    return { success: true, retried, failed };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
+
 async function logAudit(env: Env, eventType: string, actor: string, targetDeviceId: string, details: any) {
   try {
     await fetch(`${env.SUPABASE_URL}/rest/v1/hitl_audit_logs`, {
@@ -36,6 +75,11 @@ async function logAudit(env: Env, eventType: string, actor: string, targetDevice
 }
 
 export default {
+
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(retryFailedWebhooks(env));
+  },
+
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
@@ -160,45 +204,14 @@ export default {
         return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
       }
 
-      try {
-        const listRes = await env.SUPPORT_STATE.list({ prefix: "webhook_failed:" });
-        const retried = [];
-        const failed = [];
-
-        for (const key of listRes.keys) {
-          const val = await env.SUPPORT_STATE.get(key.name);
-          if (val) {
-            const parsed = JSON.parse(val);
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-            try {
-              const res = await fetch(env.CENTRAL_SUPPORT_WEBHOOK_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-Axim-Signature": env.AXIM_INTERNAL_KEY },
-                body: JSON.stringify(parsed),
-                signal: controller.signal
-              });
-              clearTimeout(timeoutId);
-              if (res.ok) {
-                await env.SUPPORT_STATE.delete(key.name);
-                retried.push(key.name);
-              } else {
-                failed.push(key.name);
-              }
-            } catch (err) {
-              clearTimeout(timeoutId);
-              failed.push(key.name);
-            }
-          }
-        }
-
-        return new Response(JSON.stringify({ success: true, retried, failed }), {
-          status: 200,
-          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
-        });
-      } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS_HEADERS });
+      const result = await retryFailedWebhooks(env);
+      if (result.error) {
+        return new Response(JSON.stringify({ error: result.error }), { status: 500, headers: CORS_HEADERS });
       }
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/command") {

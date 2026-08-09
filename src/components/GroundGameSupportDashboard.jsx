@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import DashboardHeader from './DashboardHeader';
 import IncidentList from './IncidentList';
 import CommandModal from './CommandModal';
+import HITLAuditModal from './HITLAuditModal';
 import { supabase } from '../lib/supabase';
 
 const MOCK_INCIDENTS = [
@@ -35,6 +36,7 @@ const MOCK_INCIDENTS = [
 
 export default function GroundGameSupportDashboard() {
   const [isCommandModalOpen, setCommandModalOpen] = useState(false);
+  const [isAuditModalOpen, setAuditModalOpen] = useState(false);
   const [incidents, setIncidents] = useState([]);
   const [isLive, setIsLive] = useState(true);
   const [toastMessage, setToastMessage] = useState(null);
@@ -135,13 +137,11 @@ export default function GroundGameSupportDashboard() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      setToastMessage(`Command '${cmdData.command}' successfully dispatched to ${cmdData.targetDeviceId}`);
+      // setToastMessage(`Command '${cmdData.command}' successfully dispatched to ${cmdData.targetDeviceId}`);
     } catch (error) {
       console.error("Failed to dispatch command:", error);
-      setToastMessage(`Failed to dispatch command '${cmdData.command}' to ${cmdData.targetDeviceId}`);
+      // setToastMessage(`Failed to dispatch command '${cmdData.command}' to ${cmdData.targetDeviceId}`);
     }
-    setCommandModalOpen(false);
-    setTimeout(() => setToastMessage(null), 3000);
   };
   const filteredIncidents = incidents.filter(i => {
     if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
@@ -162,6 +162,7 @@ export default function GroundGameSupportDashboard() {
     <div className="min-h-screen bg-black text-gray-100 font-sans selection:bg-indigo-500/30 relative">
       <DashboardHeader
         onOpenCommand={() => setCommandModalOpen(true)}
+        onOpenAudit={() => setAuditModalOpen(true)}
         isLive={isLive}
         onToggleLive={() => setIsLive(!isLive)}
         metrics={metrics}
@@ -233,6 +234,10 @@ export default function GroundGameSupportDashboard() {
         isOpen={isCommandModalOpen} 
         onClose={() => setCommandModalOpen(false)}
         onSendCommand={handleSendCommand}
+      />
+      <HITLAuditModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setAuditModalOpen(false)}
       />
     </div>
   );

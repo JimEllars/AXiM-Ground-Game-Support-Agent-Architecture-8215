@@ -8,10 +8,14 @@ export default function CommandModal({ isOpen, onClose, onSendCommand }) {
   
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSendCommand({ targetDeviceId: targetId, command });
-    setToast(`Command '${command}' successfully dispatched to ${targetId}`);
+    const deviceIds = targetId.split(',').map(id => id.trim()).filter(id => id);
+    if (deviceIds.length === 0) return;
+
+    await Promise.all(deviceIds.map(id => onSendCommand({ targetDeviceId: id, command })));
+
+    setToast(`Command '${command}' queued for ${deviceIds.length} device${deviceIds.length > 1 ? 's' : ''}`);
     setTargetId('');
     setTimeout(() => {
       setToast(null);
