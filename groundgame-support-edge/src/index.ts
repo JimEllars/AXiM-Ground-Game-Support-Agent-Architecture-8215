@@ -75,6 +75,29 @@ async function logAudit(env: Env, eventType: string, actor: string, targetDevice
 }
 
 
+async function cleanupStaleKVKeys(env: Env) {
+  let prunedCommandKeys = 0;
+  const now = Date.now();
+  const listRes = await env.SUPPORT_STATE.list({ prefix: "cmd:" });
+
+  for (const key of listRes.keys) {
+    const parts = key.name.split(':');
+    if (parts.length === 3) {
+      const timestamp = parseInt(parts[2], 10);
+      if (now - timestamp > 86400000) { // 24 hours
+        await env.SUPPORT_STATE.delete(key.name);
+        prunedCommandKeys++;
+      }
+    }
+  }
+
+  console.log(JSON.stringify({
+    event: "kv_cleanup",
+    prunedCommandKeys: prunedCommandKeys,
+    timestamp: new Date().toISOString()
+  }));
+}
+
 function logRequest(url: URL, method: string, deviceId: string | null, status: number) {
   console.log(JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -96,6 +119,7 @@ export default {
       status: 200
     }));
     ctx.waitUntil(retryFailedWebhooks(env));
+    ctx.waitUntil(cleanupStaleKVKeys(env));
   },
 
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
