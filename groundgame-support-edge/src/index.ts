@@ -337,10 +337,25 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
-      const listRes = await env.SUPPORT_STATE.list({ prefix: "webhook_failed:" });
-      const pendingFailedWebhooks = listRes.keys.length;
+      const [webhookFailedRes, cmdRes, lockRes] = await Promise.all([
+        env.SUPPORT_STATE.list({ prefix: "webhook_failed:" }),
+        env.SUPPORT_STATE.list({ prefix: "cmd:" }),
+        env.SUPPORT_STATE.list({ prefix: "lock:address:" })
+      ]);
+
+      const pendingFailedWebhooks = webhookFailedRes.keys.length;
+      const activeCommandQueues = cmdRes.keys.length;
+      const activeAddressLocks = lockRes.keys.length;
+
       logRequest(url, request.method, null, 200);
-      return new Response(JSON.stringify({ status: "live", timestamp: Date.now(), runtime: "edge", pendingFailedWebhooks }), {
+      return new Response(JSON.stringify({
+        status: "live",
+        timestamp: Date.now(),
+        runtime: "edge",
+        pendingFailedWebhooks,
+        activeCommandQueues,
+        activeAddressLocks
+      }), {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
       });

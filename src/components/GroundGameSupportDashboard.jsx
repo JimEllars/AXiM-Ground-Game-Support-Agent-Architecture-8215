@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import DashboardHeader from './DashboardHeader';
 import IncidentList from './IncidentList';
 import CommandModal from './CommandModal';
+import RateLimitModal from './RateLimitModal';
 import HITLAuditModal from './HITLAuditModal';
 import { supabase } from '../lib/supabase';
 
@@ -36,6 +37,7 @@ const MOCK_INCIDENTS = [
 
 export default function GroundGameSupportDashboard() {
   const [isCommandModalOpen, setCommandModalOpen] = useState(false);
+  const [isRateLimitModalOpen, setRateLimitModalOpen] = useState(false);
   const [isAuditModalOpen, setAuditModalOpen] = useState(false);
   const [incidents, setIncidents] = useState([]);
   const [isLive, setIsLive] = useState(true);
@@ -165,11 +167,26 @@ export default function GroundGameSupportDashboard() {
 
   const metrics = { selfHealedRate, escalatedCount };
 
+  // Category Distribution
+  const categoryCounts = incidents.reduce((acc, i) => {
+    acc[i.category] = (acc[i.category] || 0) + 1;
+    return acc;
+  }, {});
+
+  const categoriesConfig = {
+    gps_telemetry_drift: { label: 'GPS Drift', color: 'bg-blue-500' },
+    offline_buffer_stagnation: { label: 'Buffer Stagnation', color: 'bg-yellow-500' },
+    jwt_clock_skew: { label: 'JWT Skew', color: 'bg-purple-500' },
+    data_sync_conflict: { label: 'Sync Conflict', color: 'bg-red-500' },
+    api_rate_limit_lock: { label: 'Rate Limit', color: 'bg-orange-500' }
+  };
+
   return (
     <div className="min-h-screen bg-black text-gray-100 font-sans selection:bg-indigo-500/30 relative">
       <DashboardHeader
         onOpenCommand={() => setCommandModalOpen(true)}
         onOpenAudit={() => setAuditModalOpen(true)}
+        onOpenRateLimit={() => setRateLimitModalOpen(true)}
         isLive={isLive}
         onToggleLive={() => setIsLive(!isLive)}
         metrics={metrics}
@@ -203,7 +220,44 @@ export default function GroundGameSupportDashboard() {
           </div>
         </div>
 
+
+        {/* Category Distribution Bar */}
+        {totalIncidents > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-400 mb-2">Category Distribution</h3>
+            <div className="flex h-3 w-full rounded-full overflow-hidden bg-gray-800">
+              {Object.entries(categoryCounts).map(([cat, count]) => {
+                const percentage = ((count / totalIncidents) * 100).toFixed(1);
+                const config = categoriesConfig[cat] || { label: cat, color: 'bg-gray-500' };
+                return (
+                  <div
+                    key={cat}
+                    className={`${config.color} h-full transition-all duration-500 group relative`}
+                    style={{ width: `${percentage}%` }}
+                  >
+                    <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gray-800 text-white text-xs py-1 px-2 rounded pointer-events-none z-10 shadow-lg">
+                      {config.label}: {count} ({percentage}%)
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-4 mt-2 flex-wrap">
+              {Object.entries(categoryCounts).map(([cat, count]) => {
+                const config = categoriesConfig[cat] || { label: cat, color: 'bg-gray-500' };
+                return (
+                  <div key={cat} className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <span className={`w-2 h-2 rounded-full ${config.color}`}></span>
+                    <span>{config.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-end mb-4">
+
           <div>
             <h2 className="text-lg font-medium text-white mb-1">Live Incident Stream</h2>
             <p className="text-sm text-gray-400">Real-time autonomic telemetry from AXiM field edge agents.</p>
@@ -285,6 +339,11 @@ export default function GroundGameSupportDashboard() {
       <HITLAuditModal
         isOpen={isAuditModalOpen}
         onClose={() => setAuditModalOpen(false)}
+      />
+      <RateLimitModal
+        isOpen={isRateLimitModalOpen}
+        onClose={() => setRateLimitModalOpen(false)}
+        onSendCommand={handleSendCommand}
       />
     </div>
   );
