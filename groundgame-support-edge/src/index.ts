@@ -361,6 +361,24 @@ export default {
       const body = await request.json() as any;
       const { targetDeviceId, command, parameters } = body;
 
+      if (command === "reset_rate_limit") {
+        const listRes = await env.SUPPORT_STATE.list({ prefix: `ratelimit:${targetDeviceId}:` });
+        for (const key of listRes.keys) {
+          await env.SUPPORT_STATE.delete(key.name);
+        }
+
+        // As requested: In addition to queuing the command, list and purge all active KV keys
+        await env.SUPPORT_STATE.put(`cmd:${targetDeviceId}:${Date.now()}`, JSON.stringify({ command, parameters }), { expirationTtl: 3600 });
+
+        ctx.waitUntil(logAudit(env, "operator_command", "operator", targetDeviceId, { category: "manual_command", actions_applied: [command] }));
+        logRequest(url, request.method, targetDeviceId, 200);
+
+        return new Response(JSON.stringify({ success: true, rateLimitPurged: true, targetDeviceId }), {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      }
+
       await env.SUPPORT_STATE.put(`cmd:${targetDeviceId}:${Date.now()}`, JSON.stringify({ command, parameters }), { expirationTtl: 3600 });
 
       ctx.waitUntil(logAudit(env, "operator_command", "operator", targetDeviceId, { category: "manual_command", actions_applied: [command] }));

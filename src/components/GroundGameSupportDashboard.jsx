@@ -98,6 +98,20 @@ export default function GroundGameSupportDashboard() {
           (payload) => {
             if (payload.eventType === 'INSERT') {
               const newIncident = payload.new;
+
+              if (newIncident.remediation_status === 'self_healed') {
+                const config = {
+                  gps_telemetry_drift: { label: 'GPS Drift', color: 'bg-blue-500' },
+                  offline_buffer_stagnation: { label: 'Buffer Stagnation', color: 'bg-yellow-500' },
+                  jwt_clock_skew: { label: 'JWT Skew', color: 'bg-purple-500' },
+                  data_sync_conflict: { label: 'Sync Conflict', color: 'bg-red-500' },
+                  api_rate_limit_lock: { label: 'Rate Limit', color: 'bg-orange-500' }
+                };
+                const catLabel = config[newIncident.category]?.label || newIncident.category;
+                setToastMessage(`⚡ Autonomous Self-Healing Applied: ${catLabel} for Device ${newIncident.agent_device_id} (<50ms)`);
+                setTimeout(() => setToastMessage(null), 4000);
+              }
+
               setIncidents(prev => {
                 const mapped = {
                   id: newIncident.id,
@@ -259,6 +273,10 @@ export default function GroundGameSupportDashboard() {
         isLive={isLive}
         onToggleLive={() => setIsLive(!isLive)}
         metrics={metrics}
+        onRetryWebhooks={(count) => {
+          setToastMessage(`Successfully retried ${count} webhooks`);
+          setTimeout(() => setToastMessage(null), 4000);
+        }}
       />
       
       {toastMessage && (

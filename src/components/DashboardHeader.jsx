@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import SafeIcon from '../common/SafeIcon';
 
-export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit, onOpenRateLimit }) {
+export default function DashboardHeader(props) {
+  const { onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit, onOpenRateLimit } = props;
 
   const [healthStatus, setHealthStatus] = useState(null);
   const [latency, setLatency] = useState(null);
@@ -69,12 +70,17 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
     setIsRetrying(true);
     try {
       const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
-      await fetch(`${edgeUrl}/api/v1/support/groundgame/retry-webhooks`, {
+      const response = await fetch(`${edgeUrl}/api/v1/support/groundgame/retry-webhooks`, {
         method: 'POST',
         headers: {
           'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
         }
       });
+      const result = await response.json();
+      if (result.success && props.onRetryWebhooks) {
+        props.onRetryWebhooks(result.retried ? result.retried.length : 0);
+      }
+
       // Re-check health after a short delay
       setTimeout(() => {
         fetch(`${edgeUrl}/health`).then(res => res.ok && res.json()).then(data => {
@@ -158,7 +164,7 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
             className="flex items-center gap-2 mr-4 px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-400 text-xs font-medium hover:bg-amber-500/30 transition-colors"
           >
             <SafeIcon name="AlertTriangle" className="text-[10px]" />
-            <span>Retry Queue: {pendingFailedWebhooks}</span>
+            <span>Retry Webhooks: {pendingFailedWebhooks}</span>
             {isRetrying && <SafeIcon name="RefreshCw" className="text-[10px] animate-spin ml-1" />}
           </button>
         )}
