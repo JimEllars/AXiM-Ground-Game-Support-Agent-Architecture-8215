@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SafeIcon from '../common/SafeIcon';
 
-export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, metrics }) {
+export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit }) {
   const [healthStatus, setHealthStatus] = useState(null);
   const [latency, setLatency] = useState(null);
 
@@ -64,6 +64,13 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
             <span className="text-lg font-mono text-amber-400">{metrics.escalatedCount}</span>
           </div>
         </div>
+        <button
+          onClick={onOpenAudit}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white px-4 py-2 rounded-md transition-colors font-medium text-sm mr-2"
+        >
+          <SafeIcon name="Shield" />
+          <span>Audit Trail</span>
+        </button>
         <button 
           onClick={onOpenCommand}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md transition-colors font-medium text-sm"
