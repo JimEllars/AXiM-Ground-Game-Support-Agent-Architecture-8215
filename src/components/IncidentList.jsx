@@ -26,7 +26,7 @@ const getCategoryLabel = (cat) => {
   return cat.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 };
 
-export default function IncidentList({ incidents }) {
+export default function IncidentList({ incidents, onAcknowledge }) {
   const [expandedId, setExpandedId] = useState(null);
 
   const toggleExpand = (id) => {
@@ -70,7 +70,18 @@ export default function IncidentList({ incidents }) {
                       </div>
                     </td>
                     <td className="p-4">
-                      {getStatusBadge(incident)}
+                      <div className="flex flex-col gap-2 items-start">
+                        {getStatusBadge(incident)}
+                        {incident.status === 'escalated_to_central_support' && onAcknowledge && (
+                          <button
+                            onClick={() => onAcknowledge(incident.id, incident.operatorAddress)}
+                            className="flex items-center gap-1.5 px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/30 rounded text-[10px] font-medium transition-colors"
+                          >
+                            <SafeIcon name="Check" className="text-[10px]" />
+                            Acknowledge & Resolve
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 text-sm text-gray-500">
                       {new Date(incident.createdAt).toLocaleTimeString()}
@@ -87,15 +98,38 @@ export default function IncidentList({ incidents }) {
                   {expandedId === incident.id && (
                     <tr className="bg-gray-800/20">
                       <td colSpan="6" className="p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Diagnostic Snapshot</span>
-                          <button
-                            onClick={() => handleCopy(incident.diagnosticSnapshot)}
-                            className="text-xs flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded transition-colors"
-                          >
-                            <SafeIcon name="Copy" className="text-[10px]" /> Copy JSON
-                          </button>
+
+                        <div className="flex flex-col mb-2">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Diagnostic Snapshot</span>
+                            <button
+                              onClick={() => handleCopy(incident.diagnosticSnapshot)}
+                              className="text-xs flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded transition-colors"
+                            >
+                              <SafeIcon name="Copy" className="text-[10px]" /> Copy JSON
+                            </button>
+                          </div>
+                          {incident.diagnosticSnapshot && (
+                            <div className="flex flex-wrap gap-2 mb-2">
+                              {incident.diagnosticSnapshot.battery !== undefined && incident.diagnosticSnapshot.battery < 20 && (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  ⚠️ Low Battery: {incident.diagnosticSnapshot.battery}%
+                                </span>
+                              )}
+                              {incident.diagnosticSnapshot.gpsDriftMeters !== undefined && incident.diagnosticSnapshot.gpsDriftMeters > 15 && (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                                  📍 High GPS Drift: {incident.diagnosticSnapshot.gpsDriftMeters}m
+                                </span>
+                              )}
+                              {incident.diagnosticSnapshot.latencyMs !== undefined && incident.diagnosticSnapshot.latencyMs > 500 && (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                  🐢 High Latency: {incident.diagnosticSnapshot.latencyMs}ms
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
+
                         <pre className="bg-gray-900 border border-gray-800 p-3 rounded-lg text-xs text-green-400 font-mono overflow-x-auto whitespace-pre-wrap">
                           {incident.diagnosticSnapshot ? JSON.stringify(incident.diagnosticSnapshot, null, 2) : 'No diagnostic data available.'}
                         </pre>
