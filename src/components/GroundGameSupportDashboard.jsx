@@ -131,12 +131,12 @@ export default function GroundGameSupportDashboard() {
 
   const handleSendCommand = async (cmdData) => {
     try {
-      const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
       const response = await fetch(`${edgeUrl}/api/v1/support/groundgame/command`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
         },
         body: JSON.stringify({
           targetDeviceId: cmdData.targetDeviceId,
@@ -160,14 +160,14 @@ export default function GroundGameSupportDashboard() {
     if (selectedIncidents.length === 0) return;
 
     try {
-      const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
       const requests = selectedIncidents.map(incidentId => {
         const incident = incidents.find(i => i.id === incidentId);
         return fetch(`${edgeUrl}/api/v1/support/groundgame/acknowledge`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+            'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
           },
           body: JSON.stringify({
             incidentId,
@@ -189,12 +189,12 @@ export default function GroundGameSupportDashboard() {
 
   const handleAcknowledgeIncident = async (incidentId, operatorAddress) => {
     try {
-      const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
       const response = await fetch(`${edgeUrl}/api/v1/support/groundgame/acknowledge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
         },
         body: JSON.stringify({
           incidentId,

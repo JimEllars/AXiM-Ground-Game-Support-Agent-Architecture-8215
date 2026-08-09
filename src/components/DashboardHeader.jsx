@@ -16,10 +16,8 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
     const checkHealth = async () => {
       const start = Date.now();
       try {
-        const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
-        // Need to make sure we fetch from the edge. The original code just used `/health`, which means it might be proxied. Let's stick with what they had but parsing JSON.
-        // Wait, their manual command uses `${edgeUrl}/api/v1/support/groundgame/command` so maybe we should use edgeUrl for health too if available, but the original code did fetch('/health'). We'll keep fetch('/health') for compatibility or maybe use edgeUrl. I will use fetch('/health') as it was but parse json.
-        const res = await fetch('/health');
+        const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
+        const res = await fetch(`${edgeUrl}/health`);
         if (res.ok) {
           const data = await res.json();
           setLatency(Date.now() - start);
@@ -50,7 +48,8 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
   const handleRefreshKV = async () => {
       const start = Date.now();
       try {
-        const res = await fetch('/health');
+        const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
+        const res = await fetch(`${edgeUrl}/health`);
         if (res.ok) {
           const data = await res.json();
           setLatency(Date.now() - start);
@@ -69,16 +68,16 @@ export default function DashboardHeader({ onOpenCommand, isLive, onToggleLive, m
   const handleManualRetry = async () => {
     setIsRetrying(true);
     try {
-      const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
       await fetch(`${edgeUrl}/api/v1/support/groundgame/retry-webhooks`, {
         method: 'POST',
         headers: {
-          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+          'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
         }
       });
       // Re-check health after a short delay
       setTimeout(() => {
-        fetch('/health').then(res => res.ok && res.json()).then(data => {
+        fetch(`${edgeUrl}/health`).then(res => res.ok && res.json()).then(data => {
           if (data && data.pendingFailedWebhooks !== undefined) {
             setPendingFailedWebhooks(data.pendingFailedWebhooks);
           }

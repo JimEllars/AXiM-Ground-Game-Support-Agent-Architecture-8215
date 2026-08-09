@@ -10,10 +10,10 @@ export default function RateLimitModal({ isOpen, onClose, onSendCommand }) {
     const fetchRateLimits = async () => {
       setIsLoading(true);
       try {
-        const edgeUrl = import.meta.env.VITE_EDGE_URL || 'http://localhost:8787';
+        const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
         const res = await fetch(`${edgeUrl}/api/v1/support/groundgame/rate-limits`, {
           headers: {
-            'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || 'development_key'
+            'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
           }
         });
         if (res.ok) {

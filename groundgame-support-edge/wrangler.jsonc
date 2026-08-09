@@ -1,19 +1,24 @@
 {
+  "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "groundgame-support-edge",
   "main": "src/index.ts",
-  "compatibility_date": "2024-03-04",
+  "compatibility_date": "2026-08-09",
   "kv_namespaces": [
     {
       "binding": "SUPPORT_STATE",
-      "id": "local_dev_mock_id"
+      "id": "c1cd109c1b3f424f98dd2178d394b642"
     }
   ],
-  "vars": {
-    "AXIM_INTERNAL_KEY": "dev_key_override",
-    "SUPABASE_URL": "https://mock.supabase.co",
-    "CENTRAL_SUPPORT_WEBHOOK_URL": "http://localhost:3000/webhook"
+  "assets": {
+    "directory": "../dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/health"]
   },
   "triggers": {
     "crons": ["*/15 * * * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
   }
 }
