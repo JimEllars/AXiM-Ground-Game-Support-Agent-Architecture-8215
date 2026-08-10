@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import SafeIcon from '../common/SafeIcon';
 
-export default function FleetHealthModal({ isOpen, onClose }) {
+export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
   const [fleetData, setFleetData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [commandSuccess, setCommandSuccess] = useState({});
 
   useEffect(() => {
     if (isOpen) {
@@ -75,8 +76,59 @@ export default function FleetHealthModal({ isOpen, onClose }) {
                          Last seen: {Math.floor((Date.now() - device.lastSeen) / 1000)}s ago
                        </div>
                      </div>
-                     <div className="bg-gray-900 px-2 py-1 rounded text-xs text-gray-400 border border-gray-700">
-                        v{device.appVersion || 'Unknown'}
+                     <div className="flex items-center gap-2">
+                       {commandSuccess[device.deviceId] && (
+                          <div className="text-green-400 text-xs font-medium flex items-center gap-1 animate-pulse">
+                            <SafeIcon name="Check" className="text-[10px]" /> Sent
+                          </div>
+                       )}
+                       <div className="relative group">
+                         <button className="bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs text-white border border-gray-600 transition-colors flex items-center gap-1">
+                           <SafeIcon name="Terminal" className="text-[10px]" />
+                           Action
+                         </button>
+                         <div className="absolute right-0 mt-1 w-36 bg-gray-800 border border-gray-700 rounded-md shadow-lg hidden group-hover:block z-10 overflow-hidden">
+                           <button
+                             onClick={() => {
+                               if(onSendCommand) {
+                                 onSendCommand({ targetDeviceId: device.deviceId, command: 'flush_buffer' });
+                                 setCommandSuccess(prev => ({...prev, [device.deviceId]: true}));
+                                 setTimeout(() => setCommandSuccess(prev => ({...prev, [device.deviceId]: false})), 3000);
+                               }
+                             }}
+                             className="block w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white"
+                           >
+                             Flush Buffer
+                           </button>
+                           <button
+                             onClick={() => {
+                               if(onSendCommand) {
+                                 onSendCommand({ targetDeviceId: device.deviceId, command: 'reissue_token' });
+                                 setCommandSuccess(prev => ({...prev, [device.deviceId]: true}));
+                                 setTimeout(() => setCommandSuccess(prev => ({...prev, [device.deviceId]: false})), 3000);
+                               }
+                             }}
+                             className="block w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white"
+                           >
+                             Reissue Token
+                           </button>
+                           <button
+                             onClick={() => {
+                               if(onSendCommand) {
+                                 onSendCommand({ targetDeviceId: device.deviceId, command: 'reset_rate_limit' });
+                                 setCommandSuccess(prev => ({...prev, [device.deviceId]: true}));
+                                 setTimeout(() => setCommandSuccess(prev => ({...prev, [device.deviceId]: false})), 3000);
+                               }
+                             }}
+                             className="block w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white"
+                           >
+                             Reset Rate Limit
+                           </button>
+                         </div>
+                       </div>
+                       <div className="bg-gray-900 px-2 py-1 rounded text-xs text-gray-400 border border-gray-700">
+                          v{device.appVersion || 'Unknown'}
+                       </div>
                      </div>
                    </div>
 

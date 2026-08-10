@@ -11,6 +11,7 @@ export default function DashboardHeader(props) {
   const [activeAddressLocks, setActiveAddressLocks] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [showQueuePopover, setShowQueuePopover] = useState(false);
+  const [staleDeviceCount, setStaleDeviceCount] = useState(0);
 
 
   useEffect(() => {
@@ -40,9 +41,34 @@ export default function DashboardHeader(props) {
       }
     };
 
+    const checkFleet = async () => {
+      try {
+        const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
+        const res = await fetch(`${edgeUrl}/api/v1/support/groundgame/fleet`, {
+          method: 'GET',
+          headers: {
+            'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.staleDeviceCount !== undefined) {
+             setStaleDeviceCount(data.staleDeviceCount);
+          }
+        }
+      } catch (err) {
+        // silently fail for fleet background check
+      }
+    };
+
     checkHealth();
+    checkFleet();
     const interval = setInterval(checkHealth, 30000);
-    return () => clearInterval(interval);
+    const fleetInterval = setInterval(checkFleet, 60000); // Check fleet every 60s
+    return () => {
+      clearInterval(interval);
+      clearInterval(fleetInterval);
+    };
   }, []);
 
 
@@ -186,6 +212,15 @@ export default function DashboardHeader(props) {
             <span className="text-lg font-mono text-amber-400">{metrics.escalatedCount}</span>
           </div>
         </div>
+        {staleDeviceCount > 0 && (
+          <button
+            onClick={onOpenFleet}
+            className="flex items-center gap-2 mr-4 px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-400 text-xs font-medium hover:bg-amber-500/30 transition-colors"
+          >
+            <SafeIcon name="AlertTriangle" className="text-[10px]" />
+            <span>⚠️ Offline/Stale: {staleDeviceCount}</span>
+          </button>
+        )}
         <button
           onClick={onOpenFleet}
           className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-blue-400 px-4 py-2 rounded-md transition-colors font-medium text-sm mr-2"
