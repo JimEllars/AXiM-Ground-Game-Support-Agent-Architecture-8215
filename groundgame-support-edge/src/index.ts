@@ -130,7 +130,73 @@ export default {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/report") {
+        if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/heartbeat") {
+      try {
+        const body = await request.json() as any;
+        const { deviceId, battery, gpsAccuracyMeters, unsyncedBufferCount, appVersion } = body;
+
+        if (!deviceId) {
+          logRequest(url, request.method, null, 400);
+          return new Response("Missing deviceId", { status: 400, headers: CORS_HEADERS });
+        }
+
+        const payload = {
+          deviceId,
+          battery,
+          gpsAccuracyMeters,
+          unsyncedBufferCount,
+          appVersion,
+          lastSeen: Date.now()
+        };
+
+        await env.SUPPORT_STATE.put(`heartbeat:${deviceId}`, JSON.stringify(payload), { expirationTtl: 300 });
+
+        logRequest(url, request.method, deviceId, 200);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        logRequest(url, request.method, null, 500);
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/v1/support/groundgame/fleet") {
+      const signature = request.headers.get("X-Axim-Signature");
+      if (!signature || signature !== env.AXIM_INTERNAL_KEY) {
+        logRequest(url, request.method, null, 401);
+        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+      }
+
+      try {
+        const prefix = "heartbeat:";
+        const listRes = await env.SUPPORT_STATE.list({ prefix });
+        const devices = [];
+
+        for (const key of listRes.keys) {
+          const val = await env.SUPPORT_STATE.get(key.name);
+          if (val) {
+            devices.push(JSON.parse(val));
+          }
+        }
+
+        logRequest(url, request.method, "system", 200);
+        return new Response(JSON.stringify({
+          success: true,
+          activeFleetCount: devices.length,
+          devices
+        }), {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        logRequest(url, request.method, null, 500);
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/report") {
       try {
         const payload = await request.json() as any;
         const { deviceId, operatorAddress, category, diagnosticSnapshot } = payload;

@@ -4,6 +4,7 @@ import IncidentList from './IncidentList';
 import CommandModal from './CommandModal';
 import RateLimitModal from './RateLimitModal';
 import HITLAuditModal from './HITLAuditModal';
+import FleetHealthModal from './FleetHealthModal';
 import { supabase } from '../lib/supabase';
 
 const MOCK_INCIDENTS = [
@@ -39,6 +40,7 @@ export default function GroundGameSupportDashboard() {
   const [isCommandModalOpen, setCommandModalOpen] = useState(false);
   const [isRateLimitModalOpen, setRateLimitModalOpen] = useState(false);
   const [isAuditModalOpen, setAuditModalOpen] = useState(false);
+  const [isFleetModalOpen, setFleetModalOpen] = useState(false);
   const [incidents, setIncidents] = useState([]);
   const [isLive, setIsLive] = useState(true);
   const [toastMessage, setToastMessage] = useState(null);
@@ -48,6 +50,7 @@ export default function GroundGameSupportDashboard() {
   const [selectedIncidents, setSelectedIncidents] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('all');
 
   const fetchIncidents = useCallback(async () => {
     if (!isLive) return;
@@ -232,6 +235,14 @@ export default function GroundGameSupportDashboard() {
   const filteredIncidents = incidents.filter(i => {
     if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
     if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+
+    if (timeFilter !== 'all') {
+      const incidentTime = new Date(i.createdAt || i.created_at).getTime();
+      const now = Date.now();
+      if (timeFilter === '1h' && now - incidentTime > 3600000) return false;
+      if (timeFilter === '6h' && now - incidentTime > 21600000) return false;
+    }
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (!i.deviceId.toLowerCase().includes(q) && !i.operatorAddress.toLowerCase().includes(q)) {
@@ -270,6 +281,7 @@ export default function GroundGameSupportDashboard() {
         onOpenCommand={() => setCommandModalOpen(true)}
         onOpenAudit={() => setAuditModalOpen(true)}
         onOpenRateLimit={() => setRateLimitModalOpen(true)}
+        onOpenFleet={() => setFleetModalOpen(true)}
         isLive={isLive}
         onToggleLive={() => setIsLive(!isLive)}
         metrics={metrics}
@@ -391,6 +403,15 @@ export default function GroundGameSupportDashboard() {
               className="bg-gray-800 border border-gray-700 text-sm text-white rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500 w-64"
             />
             <select
+              value={timeFilter}
+              onChange={e => setTimeFilter(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="all">All Time (24h)</option>
+              <option value="1h">Last 1 Hour</option>
+              <option value="6h">Last 6 Hours</option>
+            </select>
+            <select
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}
               className="bg-gray-800 border border-gray-700 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
@@ -442,6 +463,10 @@ export default function GroundGameSupportDashboard() {
       <HITLAuditModal
         isOpen={isAuditModalOpen}
         onClose={() => setAuditModalOpen(false)}
+      />
+      <FleetHealthModal
+        isOpen={isFleetModalOpen}
+        onClose={() => setFleetModalOpen(false)}
       />
       <RateLimitModal
         isOpen={isRateLimitModalOpen}
