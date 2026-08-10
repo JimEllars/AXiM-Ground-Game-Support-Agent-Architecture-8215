@@ -51,6 +51,7 @@ export default function GroundGameSupportDashboard() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
+  const [realtimeStatus, setRealtimeStatus] = useState('CONNECTING');
 
   const fetchIncidents = useCallback(async () => {
     if (!isLive) return;
@@ -87,8 +88,10 @@ export default function GroundGameSupportDashboard() {
     fetchIncidents();
 
     let subscription = null;
+    let reconnectTimeoutId = null;
+    let reconnectAttempts = 0;
 
-    if (isLive) {
+    const setupSubscription = () => {
       subscription = supabase
         .channel('schema-db-changes')
         .on(
@@ -136,12 +139,32 @@ export default function GroundGameSupportDashboard() {
             }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          setRealtimeStatus(status);
+          if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            if (isLive) {
+              const backoff = Math.min(8000, 2000 * Math.pow(2, reconnectAttempts));
+              reconnectAttempts++;
+              reconnectTimeoutId = setTimeout(setupSubscription, backoff);
+            }
+          } else if (status === 'SUBSCRIBED') {
+            reconnectAttempts = 0;
+          }
+        });
+    };
+
+    if (isLive) {
+      setupSubscription();
+    } else {
+       setRealtimeStatus('CLOSED');
     }
 
     return () => {
       if (subscription) {
         supabase.removeChannel(subscription);
+      }
+      if (reconnectTimeoutId) {
+        clearTimeout(reconnectTimeoutId);
       }
     };
   }, [fetchIncidents, isLive]);
@@ -298,6 +321,13 @@ export default function GroundGameSupportDashboard() {
       )}
 
       <main className="max-w-7xl mx-auto px-6 pt-6">
+
+        {realtimeStatus !== 'SUBSCRIBED' && isLive && (
+          <div className="mb-4 text-xs font-medium bg-amber-900/30 text-amber-400 border border-amber-500/50 rounded-md px-3 py-2 flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            Realtime Disconnected — Retrying...
+          </div>
+        )}
 
         {/* KPI Cards */}
         <div className="grid grid-cols-4 gap-4 mb-6">
@@ -467,6 +497,7 @@ export default function GroundGameSupportDashboard() {
       <FleetHealthModal
         isOpen={isFleetModalOpen}
         onClose={() => setFleetModalOpen(false)}
+        onSendCommand={handleSendCommand}
       />
       <RateLimitModal
         isOpen={isRateLimitModalOpen}

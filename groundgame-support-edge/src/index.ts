@@ -174,10 +174,17 @@ export default {
         const listRes = await env.SUPPORT_STATE.list({ prefix });
         const devices = [];
 
+        let staleDeviceCount = 0;
+        const now = Date.now();
+
         for (const key of listRes.keys) {
           const val = await env.SUPPORT_STATE.get(key.name);
           if (val) {
-            devices.push(JSON.parse(val));
+            const device = JSON.parse(val);
+            devices.push(device);
+            if (now - device.lastSeen > 300000) {
+              staleDeviceCount++;
+            }
           }
         }
 
@@ -185,6 +192,7 @@ export default {
         return new Response(JSON.stringify({
           success: true,
           activeFleetCount: devices.length,
+          staleDeviceCount,
           devices
         }), {
           status: 200,
