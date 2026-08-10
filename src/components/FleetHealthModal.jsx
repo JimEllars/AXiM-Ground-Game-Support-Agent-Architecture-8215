@@ -6,6 +6,7 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [commandSuccess, setCommandSuccess] = useState({});
+  const [filterTab, setFilterTab] = useState('All');
 
   useEffect(() => {
     if (isOpen) {
@@ -49,12 +50,36 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
             <h3 className="text-lg font-semibold text-white">Active Fleet Health</h3>
             {loading && <SafeIcon name="RefreshCw" className="text-gray-400 animate-spin text-sm ml-2" />}
           </div>
+
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <SafeIcon name="X" />
           </button>
         </div>
 
+        {fleetData && (
+          <div className="px-6 pt-4 border-b border-gray-800 bg-gray-800/20 flex gap-4">
+            {['All', 'Active', 'Stale'].map(tab => {
+              const count = tab === 'All' ? fleetData.devices.length :
+                            tab === 'Active' ? fleetData.devices.filter(d => (Date.now() - d.lastSeen) <= 300000).length :
+                            fleetData.devices.filter(d => (Date.now() - d.lastSeen) > 300000).length;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setFilterTab(tab)}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${filterTab === tab ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-300'}`}
+                >
+                  {tab === 'All' ? 'All Devices' : tab === 'Stale' ? 'Stale / Offline' : tab}
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${filterTab === tab ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-800 text-gray-500'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="p-6 overflow-y-auto flex-1">
+
           {error ? (
             <div className="text-red-400 text-sm text-center py-4 bg-red-900/20 rounded-lg">
               Error fetching fleet data: {error}
@@ -66,8 +91,16 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
                 No active devices found in the last 5 minutes.
              </div>
           ) : (
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {fleetData.devices.sort((a,b) => b.lastSeen - a.lastSeen).map((device) => (
+              {fleetData.devices
+                .filter(device => {
+                  if (filterTab === 'Active') return (Date.now() - device.lastSeen) <= 300000;
+                  if (filterTab === 'Stale') return (Date.now() - device.lastSeen) > 300000;
+                  return true;
+                })
+                .sort((a,b) => b.lastSeen - a.lastSeen)
+                .map((device) => (
                 <div key={device.deviceId} className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col gap-3 relative overflow-hidden">
                    <div className="flex justify-between items-start">
                      <div>

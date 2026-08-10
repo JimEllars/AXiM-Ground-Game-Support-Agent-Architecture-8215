@@ -4,14 +4,10 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_KEY: string;
   CENTRAL_SUPPORT_WEBHOOK_URL: string;
+  ALLOWED_ORIGIN?: string;
 }
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Axim-Signature, Authorization",
-  "Cache-Control": "no-store, private"
-};
+
 
 
 async function retryFailedWebhooks(env: Env) {
@@ -124,10 +120,16 @@ export default {
 
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const CORS_HEADERS = {
+      "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, X-Axim-Signature, Authorization",
+      "Cache-Control": "no-store, private"
+    };
 
     if (request.method === "OPTIONS") {
       logRequest(url, request.method, null, 204);
-      return new Response(null, { headers: CORS_HEADERS });
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
         if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/heartbeat") {
