@@ -15,8 +15,22 @@ const getStatusBadge = (incident) => {
   switch (status) {
     case 'self_healed':
       return <div className="flex items-center"><span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20"><SafeIcon name="CheckCircle" className="text-[10px]" /> Self-Healed</span>{fixSpeed}</div>;
-    case 'escalated_to_central_support':
-      return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20"><SafeIcon name="AlertTriangle" className="text-[10px]" /> Escalated</span>;
+    case 'escalated_to_central_support': {
+      const elapsedMs = Date.now() - new Date(incident.createdAt).getTime();
+      const isBreach = elapsedMs > 900000;
+      return (
+        <div className="flex flex-col gap-1 items-start">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+            <SafeIcon name="AlertTriangle" className="text-[10px]" /> Escalated
+          </span>
+          {isBreach && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.6)]">
+              🚨 SLA Breach: {Math.floor(elapsedMs / 60000)}m Unresolved
+            </span>
+          )}
+        </div>
+      );
+    }
     default:
       return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"><SafeIcon name="Clock" className="text-[10px]" /> Detected</span>;
   }
