@@ -257,7 +257,15 @@ export default function GroundGameSupportDashboard() {
 
   const filteredIncidents = incidents.filter(i => {
     if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
-    if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'sla_breached') {
+        const incidentTime = new Date(i.createdAt || i.created_at).getTime();
+        const now = Date.now();
+        if (i.status !== 'escalated_to_central_support' || (now - incidentTime) <= 900000) return false;
+      } else if (i.status !== statusFilter) {
+        return false;
+      }
+    }
 
     if (timeFilter !== 'all') {
       const incidentTime = new Date(i.createdAt || i.created_at).getTime();
@@ -453,6 +461,21 @@ export default function GroundGameSupportDashboard() {
               <option value="data_sync_conflict">Data Sync Conflict</option>
               <option value="api_rate_limit_lock">API Rate Limit Lock</option>
             </select>
+            {(() => {
+              const slaBreachedCount = incidents.filter(i => {
+                const incidentTime = new Date(i.createdAt || i.created_at).getTime();
+                const now = Date.now();
+                return i.status === 'escalated_to_central_support' && (now - incidentTime) > 900000;
+              }).length;
+              if (slaBreachedCount > 0) {
+                return (
+                  <div className="flex items-center gap-1.5 bg-red-900/30 border border-red-500/50 text-red-400 px-2.5 py-1 rounded-full text-xs font-medium animate-pulse">
+                    🚨 {slaBreachedCount} SLA Breached
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
@@ -462,6 +485,7 @@ export default function GroundGameSupportDashboard() {
               <option value="self_healed">Self-Healed</option>
               <option value="escalated_to_central_support">Escalated</option>
               <option value="detected">Detected</option>
+              <option value="sla_breached">SLA Breached</option>
             </select>
           </div>
         </div>

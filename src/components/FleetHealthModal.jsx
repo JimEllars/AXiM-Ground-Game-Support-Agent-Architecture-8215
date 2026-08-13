@@ -7,6 +7,7 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
   const [error, setError] = useState(null);
   const [commandSuccess, setCommandSuccess] = useState({});
   const [filterTab, setFilterTab] = useState('All');
+  const [showDistressOnly, setShowDistressOnly] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -57,7 +58,8 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
         </div>
 
         {fleetData && (
-          <div className="px-6 pt-4 border-b border-gray-800 bg-gray-800/20 flex gap-4">
+          <div className="px-6 pt-4 border-b border-gray-800 bg-gray-800/20 flex justify-between items-center">
+          <div className="flex gap-4">
             {['All', 'Active', 'Stale'].map(tab => {
               const count = tab === 'All' ? fleetData.devices.length :
                             tab === 'Active' ? fleetData.devices.filter(d => (Date.now() - d.lastSeen) <= 300000).length :
@@ -76,6 +78,18 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
               );
             })}
           </div>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-300">
+              <input
+                type="checkbox"
+                checked={showDistressOnly}
+                onChange={e => setShowDistressOnly(e.target.checked)}
+                className="rounded border-gray-600 bg-gray-700 text-red-500 focus:ring-red-500/20 focus:ring-offset-gray-800"
+              />
+              <span className="flex items-center gap-1"><SafeIcon name="AlertTriangle" className="text-red-400 text-xs" /> Hardware Distress (⚠️ Low Battery / High Drift)</span>
+            </label>
+          </div>
+        </div>
         )}
 
         <div className="p-6 overflow-y-auto flex-1">
@@ -95,8 +109,17 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {fleetData.devices
                 .filter(device => {
-                  if (filterTab === 'Active') return (Date.now() - device.lastSeen) <= 300000;
-                  if (filterTab === 'Stale') return (Date.now() - device.lastSeen) > 300000;
+                  let passTab = true;
+                  if (filterTab === 'Active') passTab = (Date.now() - device.lastSeen) <= 300000;
+                  if (filterTab === 'Stale') passTab = (Date.now() - device.lastSeen) > 300000;
+
+                  if (!passTab) return false;
+
+                  if (showDistressOnly) {
+                    if (!(device.battery < 20 || device.gpsAccuracyMeters > 15)) {
+                      return false;
+                    }
+                  }
                   return true;
                 })
                 .sort((a,b) => b.lastSeen - a.lastSeen)

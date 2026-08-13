@@ -71,6 +71,44 @@ async function logAudit(env: Env, eventType: string, actor: string, targetDevice
 }
 
 
+async function auditOfflineDevices(env: Env) {
+  const now = Date.now();
+  const listRes = await env.SUPPORT_STATE.list({ prefix: "heartbeat:" });
+
+  for (const key of listRes.keys) {
+    const dataStr = await env.SUPPORT_STATE.get(key.name);
+    if (!dataStr) continue;
+
+    try {
+      const data = JSON.parse(dataStr);
+      if (data.lastSeen && (now - data.lastSeen > 300000)) {
+        // Device is offline > 5 mins
+        const deviceId = data.deviceId || key.name.replace("heartbeat:", "");
+
+        // Check if we already audited it
+        const auditKey = `audit:offline:${deviceId}`;
+        const hasBeenAudited = await env.SUPPORT_STATE.get(auditKey);
+
+        if (!hasBeenAudited) {
+          await writeAuditLog(env, {
+            action_type: "device_offline_detected",
+            actor_id: "system",
+            target_device_id: deviceId,
+            details: {
+              lastSeen: data.lastSeen,
+              offlineDurationMs: now - data.lastSeen
+            }
+          });
+          // Set key with 24 hour TTL to prevent spam
+          await env.SUPPORT_STATE.put(auditKey, "1", { expirationTtl: 86400 });
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to parse heartbeat for ${key.name}`);
+    }
+  }
+}
+
 async function cleanupStaleKVKeys(env: Env) {
   let prunedCommandKeys = 0;
   const now = Date.now();
@@ -116,6 +154,7 @@ export default {
     }));
     ctx.waitUntil(retryFailedWebhooks(env));
     ctx.waitUntil(cleanupStaleKVKeys(env));
+    ctx.waitUntil(auditOfflineDevices(env));
   },
 
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
