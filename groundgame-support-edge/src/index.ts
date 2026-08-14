@@ -567,6 +567,147 @@ if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/re
       });
     }
 
+
+    // GET /api/telemetry/health
+    if (request.method === "GET" && url.pathname === "/api/telemetry/health") {
+      const start = Date.now();
+      const [cmdRes, lockRes] = await Promise.all([
+        env.SUPPORT_STATE.list({ prefix: "cmd:" }),
+        env.SUPPORT_STATE.list({ prefix: "lock:address:" })
+      ]);
+      const latency = Date.now() - start;
+      const uptime = 1000; // polyfill mock
+
+      logRequest(url, request.method, null, 200);
+      return new Response(JSON.stringify({
+        status: "active",
+        fleet_status: "online",
+        memory_usage: "approx_4mb",
+        latency_ms: latency,
+        uptime_seconds: uptime,
+        active_queues: cmdRes.keys.length,
+        active_locks: lockRes.keys.length
+      }), {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
+
+
+    // POST /api/commands/dispatch
+    if (request.method === "POST" && url.pathname === "/api/commands/dispatch") {
+      const signature = request.headers.get("X-Axim-Signature") || request.headers.get("Authorization");
+      if (!signature || (signature !== env.AXIM_INTERNAL_KEY && signature !== `Bearer ${env.AXIM_INTERNAL_KEY}`)) {
+        logRequest(url, request.method, null, 401);
+        return new Response("Unauthorized Edge Ingress", { status: 401, headers: CORS_HEADERS });
+      }
+
+      try {
+        const body = await request.json() as any;
+        const { targetDeviceId, command, parameters } = body;
+
+        if (!targetDeviceId || !command) {
+            return new Response("Missing required fields", { status: 400, headers: CORS_HEADERS });
+        }
+
+        const timestamp = Date.now();
+        await env.SUPPORT_STATE.put(`cmd:${targetDeviceId}:${timestamp}`, JSON.stringify({ command, parameters, timestamp }), { expirationTtl: 3600 });
+
+        ctx.waitUntil(logAudit(env, "operator_command", "operator", targetDeviceId, { category: "manual_command", actions_applied: [command], dispatched_at: timestamp }));
+        logRequest(url, request.method, targetDeviceId, 200);
+
+        return new Response(JSON.stringify({ success: true, status: "command_queued", targetDeviceId, timestamp }), {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+
+    // GET /api/ratelimits
+    if (request.method === "GET" && url.pathname === "/api/ratelimits") {
+      const signature = request.headers.get("X-Axim-Signature") || request.headers.get("Authorization");
+      if (!signature || (signature !== env.AXIM_INTERNAL_KEY && signature !== `Bearer ${env.AXIM_INTERNAL_KEY}`)) {
+        logRequest(url, request.method, null, 401);
+        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+      }
+
+      const prefix = "ratelimit:";
+      const listRes = await env.SUPPORT_STATE.list({ prefix });
+      const throttledDevices = [];
+      let totalQuotaUtilization = 0;
+
+      for (const key of listRes.keys) {
+        const val = await env.SUPPORT_STATE.get(key.name);
+        if (val) {
+          const count = parseInt(val, 10);
+          totalQuotaUtilization += count;
+          const parts = key.name.split(':');
+          if (parts.length >= 3) {
+             const deviceId = parts[1];
+             const minuteKey = parseInt(parts[2], 10);
+             const expiresAtMs = (minuteKey + 1) * 60000;
+             const expiresInSeconds = Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000));
+             throttledDevices.push({
+               deviceId,
+               requestCount: count,
+               expiresInSeconds
+             });
+          }
+        }
+      }
+
+      logRequest(url, request.method, "system", 200);
+      return new Response(JSON.stringify({
+        success: true,
+        quota_utilization: totalQuotaUtilization,
+        active_throttles: throttledDevices.length,
+        throttledDevices
+      }), {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
+
+
+    // POST /api/hitl/decision
+    if (request.method === "POST" && url.pathname === "/api/hitl/decision") {
+      const signature = request.headers.get("X-Axim-Signature") || request.headers.get("Authorization");
+      if (!signature || (signature !== env.AXIM_INTERNAL_KEY && signature !== `Bearer ${env.AXIM_INTERNAL_KEY}`)) {
+        logRequest(url, request.method, null, 401);
+        return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
+      }
+
+      try {
+        const body = await request.json() as any;
+        const { incidentId, targetDeviceId, decision, operatorAddress, reason } = body;
+
+        if (!incidentId || !decision) {
+            return new Response("Missing required fields", { status: 400, headers: CORS_HEADERS });
+        }
+
+        const timestamp = Date.now();
+        ctx.waitUntil(logAudit(env, `hitl_decision_${decision}`, operatorAddress || "operator", targetDeviceId || "unknown", {
+            incidentId, decision, reason, timestamp
+        }));
+
+        logRequest(url, request.method, targetDeviceId || "system", 200);
+        return new Response(JSON.stringify({
+            success: true,
+            incidentId,
+            decision,
+            timestamp
+        }), {
+            status: 200,
+            headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     logRequest(url, request.method, null, 404);
     return new Response("Not Found", { status: 404 });
   }

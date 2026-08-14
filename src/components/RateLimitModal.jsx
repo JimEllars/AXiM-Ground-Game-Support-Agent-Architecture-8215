@@ -1,33 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import SafeIcon from '../common/SafeIcon';
+import { useAgentTelemetry } from '../lib/useAgentTelemetry';
+
 
 export default function RateLimitModal({ isOpen, onClose, onSendCommand }) {
+  const { rateLimits, isLive } = useAgentTelemetry(10000);
   const [throttledDevices, setThrottledDevices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
-    const fetchRateLimits = async () => {
-      setIsLoading(true);
-      try {
-        const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
-        const res = await fetch(`${edgeUrl}/api/v1/support/groundgame/rate-limits`, {
-          headers: {
-            'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
-          }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setThrottledDevices(data.throttledDevices || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch rate limits:', err);
-      } finally {
+    if (rateLimits && rateLimits.throttledDevices) {
+        setThrottledDevices(rateLimits.throttledDevices);
         setIsLoading(false);
-      }
-    };
-    fetchRateLimits();
-  }, [isOpen]);
+    }
+
+
+    /* old fetch logic commented out by patch */
+  }, [isOpen, rateLimits]);
+
 
   const handleReset = async (deviceId) => {
     await onSendCommand({ targetDeviceId: deviceId, command: 'reset_rate_limit' });

@@ -27,6 +27,36 @@ export default function HITLAuditModal({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
+
+  const handleHITLDecision = async (logId, incidentId, deviceId, decision) => {
+      // Optimistically update the log locally
+      setLogs(current => current.map(log =>
+          log.id === logId ? { ...log, event_type: `hitl_decision_${decision}` } : log
+      ));
+
+      const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
+      const aximKey = import.meta.env.VITE_AXIM_INTERNAL_KEY || '';
+
+      try {
+          await fetch(`${edgeUrl}/api/hitl/decision`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'X-Axim-Signature': aximKey
+              },
+              body: JSON.stringify({
+                  incidentId,
+                  targetDeviceId: deviceId,
+                  decision,
+                  reason: 'Operator manual override via HITL audit'
+              })
+          });
+      } catch (err) {
+          console.error("Failed HITL decision", err);
+          // could revert optimistic update here if needed
+      }
+  };
+
   const fetchLogs = async () => {
     setLoading(true);
     try {
@@ -116,6 +146,14 @@ export default function HITLAuditModal({ isOpen, onClose }) {
                       <div className="text-gray-300 whitespace-pre-wrap font-mono text-xs bg-gray-900 p-2 rounded">
                         {JSON.stringify(log.details, null, 2)}
                       </div>
+
+                      {log.event_type === 'operator_takeover' && (
+                          <div className="mt-3 flex gap-2">
+                             <button onClick={() => handleHITLDecision(log.id, log.details?.incidentId || 'unknown', log.target_device_id, 'approve')} className="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs font-medium transition-colors">Approve Action</button>
+                             <button onClick={() => handleHITLDecision(log.id, log.details?.incidentId || 'unknown', log.target_device_id, 'reject')} className="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs font-medium transition-colors">Reject Action</button>
+                          </div>
+                      )}
+
                    </div>
                 </div>
               ))}
