@@ -174,7 +174,7 @@ export default {
         if (request.method === "POST" && url.pathname === "/api/v1/support/groundgame/heartbeat") {
       try {
         const body = await request.json() as any;
-        const { deviceId, battery, gpsAccuracyMeters, unsyncedBufferCount, appVersion } = body;
+        const { deviceId, battery, gpsAccuracyMeters, unsyncedBufferCount, appVersion, latency } = body;
 
         if (!deviceId) {
           logRequest(url, request.method, null, 400);
@@ -187,10 +187,41 @@ export default {
           gpsAccuracyMeters,
           unsyncedBufferCount,
           appVersion,
+          latency,
           lastSeen: Date.now()
         };
 
         await env.SUPPORT_STATE.put(`heartbeat:${deviceId}`, JSON.stringify(payload), { expirationTtl: 300 });
+
+        if (env.CENTRAL_SUPPORT_WEBHOOK_URL && (battery < 15 || latency > 500)) {
+          ctx.waitUntil((async () => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const webhookPayload = {
+              appSource: "AXiM Ground Game",
+              eventType: "critical_distress_alert",
+              deviceId: deviceId,
+              battery: battery,
+              latency: latency,
+              timestamp: Date.now()
+            };
+            try {
+              const res = await fetch(env.CENTRAL_SUPPORT_WEBHOOK_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Axim-Signature": env.AXIM_INTERNAL_KEY },
+                body: JSON.stringify(webhookPayload),
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              if (!res.ok) {
+                console.error(`Webhook distress alert failed: ${res.status}`);
+              }
+            } catch (err) {
+              clearTimeout(timeoutId);
+              console.error("Central Support Webhook Error (Distress Alert):", err);
+            }
+          })());
+        }
 
         logRequest(url, request.method, deviceId, 200);
         return new Response(JSON.stringify({ success: true }), {
