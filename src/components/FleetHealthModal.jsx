@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import SafeIcon from '../common/SafeIcon';
+import { useAgentTelemetry } from '../lib/useAgentTelemetry';
 
 export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
   const [fleetData, setFleetData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [commandSuccess, setCommandSuccess] = useState({});
   const [filterTab, setFilterTab] = useState('All');
+  const [commandSuccess, setCommandSuccess] = useState({});
   const [showDistressOnly, setShowDistressOnly] = useState(false);
+
+  const { healthData, isLive } = useAgentTelemetry(10000);
 
   useEffect(() => {
     if (isOpen) {
       fetchFleetHealth();
-      const interval = setInterval(fetchFleetHealth, 15000);
+      const interval = setInterval(fetchFleetHealth, 30000); // 30s poll
       return () => clearInterval(interval);
     }
   }, [isOpen]);
@@ -23,13 +26,12 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
     try {
       const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
       const response = await fetch(`${edgeUrl}/api/v1/support/groundgame/fleet`, {
-        method: 'GET',
         headers: {
           'X-Axim-Signature': import.meta.env.VITE_AXIM_INTERNAL_KEY || ''
         }
       });
       if (!response.ok) {
-        throw new Error('Failed to fetch fleet data');
+        throw new Error('Failed to fetch fleet health');
       }
       const data = await response.json();
       setFleetData(data);
@@ -47,11 +49,10 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
       <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh]">
         <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-800/50">
           <div className="flex items-center gap-2">
-            <SafeIcon name="Smartphone" className="text-blue-400" />
-            <h3 className="text-lg font-semibold text-white">Active Fleet Health</h3>
+            <SafeIcon name="Activity" className="text-blue-400 text-xl" />
+            <h2 className="text-lg font-semibold text-white">Active Edge Fleet Pulse</h2>
             {loading && <SafeIcon name="RefreshCw" className="text-gray-400 animate-spin text-sm ml-2" />}
           </div>
-
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <SafeIcon name="X" />
           </button>
@@ -59,11 +60,20 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
 
         {fleetData && (
           <div className="px-6 pt-4 border-b border-gray-800 bg-gray-800/20 flex justify-between items-center">
-          <div className="flex gap-4">
+
+            <div className="flex items-center gap-4">
+              {healthData && (
+                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${isLive ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                  <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+                  Edge: {isLive ? healthData.status || 'Active' : 'Offline'}
+                </div>
+              )}
+              <div className="flex gap-4">
             {['All', 'Active', 'Stale'].map(tab => {
-              const count = tab === 'All' ? fleetData.devices.length :
-                            tab === 'Active' ? fleetData.devices.filter(d => (Date.now() - d.lastSeen) <= 300000).length :
-                            fleetData.devices.filter(d => (Date.now() - d.lastSeen) > 300000).length;
+              let count = fleetData.activeFleetCount;
+              if (tab === 'Active') count = fleetData.devices.filter(d => (Date.now() - d.lastSeen) <= 300000).length;
+              if (tab === 'Stale') count = fleetData.devices.filter(d => (Date.now() - d.lastSeen) > 300000).length;
+
               return (
                 <button
                   key={tab}
@@ -77,6 +87,7 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
                 </button>
               );
             })}
+          </div>
           </div>
           <div className="flex items-center gap-2 mb-2">
             <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-300">

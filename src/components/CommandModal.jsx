@@ -6,6 +6,8 @@ export default function CommandModal({ isOpen, onClose, onSendCommand }) {
   const [command, setCommand] = useState('flush_buffer');
   const [toast, setToast] = useState(null);
   
+  const [statusMap, setStatusMap] = useState({});
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
@@ -13,15 +15,48 @@ export default function CommandModal({ isOpen, onClose, onSendCommand }) {
     const deviceIds = targetId.split(',').map(id => id.trim()).filter(id => id);
     if (deviceIds.length === 0) return;
 
-    await Promise.all(deviceIds.map(id => onSendCommand({ targetDeviceId: id, command })));
+    const newStatuses = {};
+    deviceIds.forEach(id => { newStatuses[id] = 'Queued'; });
+    setStatusMap(prev => ({...prev, ...newStatuses}));
 
-    setToast(`Command '${command}' queued for ${deviceIds.length} device${deviceIds.length > 1 ? 's' : ''}`);
-    setTargetId('');
+    const edgeUrl = import.meta.env.VITE_EDGE_URL || '';
+    const aximKey = import.meta.env.VITE_AXIM_INTERNAL_KEY || '';
+
+    let successCount = 0;
+    let failCount = 0;
+
+    await Promise.all(deviceIds.map(async (id) => {
+      try {
+        const res = await fetch(`${edgeUrl}/api/commands/dispatch`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Axim-Signature': aximKey
+            },
+            body: JSON.stringify({ targetDeviceId: id, command })
+        });
+
+        if (res.ok) {
+            setStatusMap(prev => ({...prev, [id]: 'Dispatched'}));
+            successCount++;
+        } else {
+            const data = await res.json();
+            setStatusMap(prev => ({...prev, [id]: `Error: ${data.error || 'Unknown'}`}));
+            failCount++;
+        }
+      } catch(err) {
+         setStatusMap(prev => ({...prev, [id]: 'Error: Network'}));
+         failCount++;
+      }
+    }));
+
+    setToast(`Dispatched ${command} to ${successCount} devices (${failCount} failed)`);
     setTimeout(() => {
       setToast(null);
-      onClose();
+      if(failCount === 0) onClose();
     }, 2000);
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -68,7 +103,23 @@ export default function CommandModal({ isOpen, onClose, onSendCommand }) {
             </select>
           </div>
 
+
+          {Object.keys(statusMap).length > 0 && (
+            <div className="mb-4">
+               <h3 className="text-xs font-medium text-gray-400 mb-2">Dispatch Status</h3>
+               <div className="space-y-1">
+                 {Object.entries(statusMap).map(([id, status]) => (
+                   <div key={id} className="flex justify-between items-center text-sm">
+                      <span className="text-gray-300">{id}</span>
+                      <span className={`font-medium ${status === 'Dispatched' ? 'text-green-400' : status === 'Queued' ? 'text-yellow-400' : 'text-red-400'}`}>{status}</span>
+                   </div>
+                 ))}
+               </div>
+            </div>
+          )}
+
           <div className="pt-4 flex justify-end gap-3">
+
             <button 
               type="button" 
               onClick={onClose}
