@@ -1,10 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import SafeIcon from '../common/SafeIcon';
 
 export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
   const [fleetData, setFleetData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedDevices, setSelectedDevices] = useState(new Set());
+
+  const handleSelectDevice = (deviceId) => {
+    setSelectedDevices(prev => {
+      const next = new Set(prev);
+      if (next.has(deviceId)) next.delete(deviceId);
+      else next.add(deviceId);
+      return next;
+    });
+  };
+
+  const filteredDeviceIds = useMemo(() => {
+    if (!fleetData) return [];
+    return fleetData.devices
+      .filter(device => {
+        if (filterTab === 'Active') return (Date.now() - device.lastSeen) <= 300000;
+        if (filterTab === 'Stale') return (Date.now() - device.lastSeen) > 300000;
+        return true;
+      })
+      .filter(device => !showDistressOnly || (device.battery < 20 || device.gpsAccuracyMeters > 15))
+      .map(d => d.deviceId);
+  }, [fleetData, filterTab, showDistressOnly]);
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedDevices(new Set(filteredDeviceIds));
+    } else {
+      setSelectedDevices(new Set());
+    }
+  };
+
+  const handleBulkCommand = (command) => {
+    if (onSendCommand && selectedDevices.size > 0) {
+      selectedDevices.forEach(deviceId => {
+        onSendCommand({ targetDeviceId: deviceId, command });
+        setCommandSuccess(prev => ({...prev, [deviceId]: true}));
+        setTimeout(() => setCommandSuccess(prev => ({...prev, [deviceId]: false})), 3000);
+      });
+      setSelectedDevices(new Set()); // clear after sending
+    }
+  };
   const [commandSuccess, setCommandSuccess] = useState({});
   const [filterTab, setFilterTab] = useState('All');
   const [showDistressOnly, setShowDistressOnly] = useState(false);
@@ -58,7 +99,44 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
         </div>
 
         {fleetData && (
-          <div className="px-6 pt-4 border-b border-gray-800 bg-gray-800/20 flex justify-between items-center">
+          <div className="px-6 py-3 border-b border-gray-800 bg-gray-800/40 flex flex-col gap-3">
+            {selectedDevices.size > 0 && (
+              <div className="flex items-center justify-between bg-indigo-900/30 border border-indigo-500/30 rounded-lg p-2 px-4">
+                <span className="text-sm font-medium text-indigo-300">
+                  {selectedDevices.size} device(s) selected
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleBulkCommand('flush_buffer')}
+                    className="bg-gray-800 hover:bg-gray-700 text-xs text-white px-3 py-1.5 rounded border border-gray-600 transition-colors"
+                  >
+                    Bulk Flush Buffer
+                  </button>
+                  <button
+                    onClick={() => handleBulkCommand('reissue_token')}
+                    className="bg-gray-800 hover:bg-gray-700 text-xs text-white px-3 py-1.5 rounded border border-gray-600 transition-colors"
+                  >
+                    Bulk Reissue Tokens
+                  </button>
+                  <button
+                    onClick={() => handleBulkCommand('reset_rate_limit')}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-xs text-white px-3 py-1.5 rounded transition-colors"
+                  >
+                    Bulk Reset Rate Limits
+                  </button>
+                </div>
+              </div>
+            )}
+          <div className="flex items-center gap-2 mb-2 w-full pl-4 pt-1">
+            <input
+               type="checkbox"
+               onChange={handleSelectAll}
+               checked={fleetData && filteredDeviceIds.length > 0 && selectedDevices.size === filteredDeviceIds.length}
+               className="rounded border-gray-600 bg-gray-700 text-indigo-500 focus:ring-indigo-500/20 focus:ring-offset-gray-800"
+            />
+            <span className="text-sm font-medium text-gray-400">Select All Filtered</span>
+          </div>
+          <div className="flex justify-between items-center w-full">
           <div className="flex gap-4">
             {['All', 'Active', 'Stale'].map(tab => {
               const count = tab === 'All' ? fleetData.devices.length :
@@ -77,6 +155,7 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
                 </button>
               );
             })}
+          </div>
           </div>
           <div className="flex items-center gap-2 mb-2">
             <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-300">
@@ -126,10 +205,18 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
                 .map((device) => (
                 <div key={device.deviceId} className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col gap-3 relative overflow-hidden">
                    <div className="flex justify-between items-start">
-                     <div>
-                       <div className="font-mono text-sm text-white font-medium">{device.deviceId}</div>
-                       <div className="text-xs text-gray-500 mt-0.5">
-                         Last seen: {Math.floor((Date.now() - device.lastSeen) / 1000)}s ago
+                     <div className="flex gap-3 items-start">
+                       <input
+                         type="checkbox"
+                         checked={selectedDevices.has(device.deviceId)}
+                         onChange={() => handleSelectDevice(device.deviceId)}
+                         className="mt-1 rounded border-gray-600 bg-gray-700 text-indigo-500 focus:ring-indigo-500/20 focus:ring-offset-gray-800"
+                       />
+                       <div>
+                         <div className="font-mono text-sm text-white font-medium">{device.deviceId}</div>
+                         <div className="text-xs text-gray-500 mt-0.5">
+                           Last seen: {Math.floor((Date.now() - device.lastSeen) / 1000)}s ago
+                         </div>
                        </div>
                      </div>
                      <div className="flex items-center gap-2">
