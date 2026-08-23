@@ -306,6 +306,13 @@ export default function GroundGameSupportDashboard() {
     api_rate_limit_lock: { label: 'Rate Limit', color: 'bg-orange-500' }
   };
 
+
+  const slaBreachedCount = incidents.filter(i => {
+    const incidentTime = new Date(i.createdAt || i.created_at).getTime();
+    const now = Date.now();
+    return i.status === 'escalated_to_central_support' && (now - incidentTime) > 900000;
+  }).length;
+
   return (
     <div className="min-h-screen bg-black text-gray-100 font-sans selection:bg-indigo-500/30 relative">
       <DashboardHeader
@@ -316,6 +323,8 @@ export default function GroundGameSupportDashboard() {
         isLive={isLive}
         onToggleLive={() => setIsLive(!isLive)}
         metrics={metrics}
+        slaBreachedCount={slaBreachedCount}
+        onSlaBreachClick={() => setStatusFilter("sla_breached")}
         onRetryWebhooks={(count) => {
           setToastMessage(`Successfully retried ${count} webhooks`);
           setTimeout(() => setToastMessage(null), 4000);
