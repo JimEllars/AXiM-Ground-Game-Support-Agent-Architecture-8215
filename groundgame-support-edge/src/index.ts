@@ -90,15 +90,10 @@ async function auditOfflineDevices(env: Env) {
         const hasBeenAudited = await env.SUPPORT_STATE.get(auditKey);
 
         if (!hasBeenAudited) {
-          await writeAuditLog(env, {
-            action_type: "device_offline_detected",
-            actor_id: "system",
-            target_device_id: deviceId,
-            details: {
+          await logAudit(env, "device_offline_detected", "system", deviceId, {
               lastSeen: data.lastSeen,
               offlineDurationMs: now - data.lastSeen
-            }
-          });
+            });
           // Set key with 24 hour TTL to prevent spam
           await env.SUPPORT_STATE.put(auditKey, "1", { expirationTtl: 86400 });
         }
@@ -268,7 +263,7 @@ export default {
           devices
         }), {
           status: 200,
-          headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "public, max-age=5, s-maxage=5" }
         });
       } catch (err: any) {
         logRequest(url, request.method, null, 500);

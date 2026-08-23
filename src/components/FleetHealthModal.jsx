@@ -28,7 +28,30 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
       .map(d => d.deviceId);
   }, [fleetData, filterTab, showDistressOnly]);
 
-  const handleSelectAll = (e) => {
+
+  const handleExportCSV = () => {
+    if (!fleetData || !fleetData.devices) return;
+    const devicesToExport = fleetData.devices.filter(d => filteredDeviceIds.includes(d.deviceId));
+    const headers = ["Device ID", "App Version", "Battery %", "GPS Accuracy (m)", "Offline Buffer Count", "Last Seen (Seconds Ago)", "Status"];
+    const rows = devicesToExport.map(device => {
+      const lastSeenSeconds = Math.floor((Date.now() - device.lastSeen) / 1000);
+      const isStale = (Date.now() - device.lastSeen) > 300000;
+      const status = isStale ? 'Stale / Offline' : 'Active';
+      return [device.deviceId, device.appVersion || 'Unknown', device.battery || 0, device.gpsAccuracyMeters || 'N/A', device.unsyncedBufferCount || 0, lastSeenSeconds, status].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "axim_fleet_health_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedDevices(new Set(filteredDeviceIds));
     } else {
@@ -91,6 +114,9 @@ export default function FleetHealthModal({ isOpen, onClose, onSendCommand }) {
             <SafeIcon name="Smartphone" className="text-blue-400" />
             <h3 className="text-lg font-semibold text-white">Active Fleet Health</h3>
             {loading && <SafeIcon name="RefreshCw" className="text-gray-400 animate-spin text-sm ml-2" />}
+            <button onClick={handleExportCSV} className="ml-4 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-white px-3 py-1.5 rounded transition-colors flex items-center gap-2">
+              <SafeIcon name="Download" className="text-xs" /> Export Fleet CSV
+            </button>
           </div>
 
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">

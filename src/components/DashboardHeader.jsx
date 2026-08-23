@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SafeIcon from '../common/SafeIcon';
 
 export default function DashboardHeader(props) {
-  const { onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit, onOpenRateLimit, onOpenFleet } = props;
+  const { onOpenCommand, isLive, onToggleLive, metrics, onOpenAudit, onOpenRateLimit, onOpenFleet, slaBreachedCount, onSlaBreachClick } = props;
 
   const [healthStatus, setHealthStatus] = useState(null);
   const [latency, setLatency] = useState(null);
@@ -203,6 +203,15 @@ export default function DashboardHeader(props) {
         </button>
 
         <div className="flex gap-6 mr-6">
+
+          {slaBreachedCount > 0 && (
+            <div
+              onClick={onSlaBreachClick}
+              className="flex items-center gap-1.5 bg-red-900/30 border border-red-500/50 text-red-400 px-3 py-1 rounded-full text-xs font-medium animate-pulse cursor-pointer hover:bg-red-900/50 transition-colors mr-4"
+            >
+              🚨 SLA Breached: {slaBreachedCount}
+            </div>
+          )}
           <div className="flex flex-col">
             <span className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Self-Healed</span>
             <span className="text-lg font-mono text-green-400">{metrics.selfHealedRate}%</span>
